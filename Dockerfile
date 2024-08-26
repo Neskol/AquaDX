@@ -27,6 +27,7 @@ FROM eclipse-temurin:21-jre-alpine
 
 # Set the deployment directory
 WORKDIR /app
+ADD web /app/
 
 # Copy only the built JAR from the builder image
 COPY --from=builder /home/gradle/build/libs/AquaDX-*.jar /app/
