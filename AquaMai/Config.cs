@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using Tomlet.Attributes;
 
 namespace AquaMai
 {
@@ -15,6 +16,7 @@ namespace AquaMai
             public bool TicketUnlock { get; set; }
             public bool MapUnlock { get; set; }
             public bool UnlockUtage { get; set; }
+            public bool DebugFeature { get; set; }
         }
 
         public class UXConfig
@@ -22,6 +24,7 @@ namespace AquaMai
             public bool SkipWarningScreen { get; set; }
             public bool SinglePlayer { get; set; }
             public bool SkipToMusicSelection { get; set; }
+            public bool LoadAssetsPng { get; set; }
             public bool LoadJacketPng { get; set; }
             public bool LoadAssetBundleWithoutManifest { get; set; }
             public bool QuickSkip { get; set; }
@@ -32,7 +35,10 @@ namespace AquaMai
             public bool ImmediateSave { get; set; }
             public bool LoadLocalBga { get; set; }
             public bool TestProof { get; set; }
+            public bool HideSelfMadeCharts { get; set; }
+            public bool SelectionDetail { get; set; }
             public string CustomVersionString { get; set; }
+            public string CustomPlaceName { get; set; }
             public string ExecOnIdle { get; set; }
             public string ExecOnEntry { get; set; }
         }
@@ -46,6 +52,8 @@ namespace AquaMai
         {
             public bool SkipVersionCheck { get; set; }
             public bool RemoveEncryption { get; set; }
+            public bool ForceAsServer { get; set; } = true;
+            public bool ForceFreePlay { get; set; } = true;
         }
     }
 }

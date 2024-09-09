@@ -1,8 +1,8 @@
-﻿using AMDaemon;
-using AMDaemon.Allnet;
+﻿using AMDaemon.Allnet;
 using HarmonyLib;
 using Manager;
 using Manager.Operation;
+using Monitor.MusicSelect.ChainList;
 using Net;
 using UnityEngine;
 
@@ -17,22 +17,6 @@ public class BasicFix
         return false;
     }
 
-    [HarmonyPrefix]
-    [HarmonyPatch(typeof(LanInstall), "IsServer", MethodType.Getter)]
-    private static bool PreIsServer(ref bool __result)
-    {
-        __result = true;
-        return false;
-    }
-
-    [HarmonyPrefix]
-    [HarmonyPatch(typeof(AMDaemon.Network), "IsLanAvailable", MethodType.Getter)]
-    private static bool PreIsLanAvailable(ref bool __result)
-    {
-        __result = false;
-        return false;
-    }
-
     [HarmonyPostfix]
     [HarmonyPatch(typeof(OperationManager), "CheckAuth_Proc")]
     private static void PostCheckAuthProc(ref OperationData ____operationData)
@@ -41,14 +25,6 @@ public class BasicFix
         {
             ____operationData.ServerUri = Auth.GameServerUri;
         }
-    }
-
-    [HarmonyPrefix]
-    [HarmonyPatch(typeof(Manager.Credit), "IsFreePlay")]
-    private static bool PreIsFreePlay(ref bool __result)
-    {
-        __result = true;
-        return false;
     }
 
     [HarmonyPrefix]
@@ -97,5 +73,24 @@ public class BasicFix
     {
         __result = 1024;
         return false;
+    }
+
+    [HarmonyPostfix]
+    [HarmonyPatch(typeof(MusicChainCardObejct), "SetLevel")]
+    private static void FixLevelShift(MusicLevelID levelID, ref SpriteCounter ____digitLevel, ref SpriteCounter ____doubleDigitLevel)
+    {
+        switch (levelID)
+        {
+            case > MusicLevelID.Level9P:
+                ____digitLevel.gameObject.SetActive(value: false);
+                ____doubleDigitLevel.gameObject.SetActive(value: true);
+                ____doubleDigitLevel.ChangeText(levelID.GetLevelNum().PadRight(3));
+                break;
+            case >= MusicLevelID.None:
+                ____digitLevel.gameObject.SetActive(value: true);
+                ____doubleDigitLevel.gameObject.SetActive(value: false);
+                ____digitLevel.ChangeText(levelID.GetLevelNum().PadRight(2));
+                break;
+        }
     }
 }

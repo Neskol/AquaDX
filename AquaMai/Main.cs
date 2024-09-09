@@ -1,5 +1,6 @@
 ﻿using System;
 using AquaMai.Fix;
+using AquaMai.Helpers;
 using AquaMai.UX;
 using MelonLoader;
 using Tomlet;
@@ -12,20 +13,20 @@ namespace AquaMai
         public const string Description = "Mod for Sinmai";
         public const string Author = "Aza";
         public const string Company = null;
-        public const string Version = "1.0.0";
+        public const string Version = "1.0.4";
         public const string DownloadLink = null;
     }
 
     public class AquaMai : MelonMod
     {
         public static Config AppConfig { get; private set; }
-        
+
         private static void Patch(Type type)
         {
             MelonLogger.Msg($"> Patching {type}");
             HarmonyLib.Harmony.CreateAndPatchAll(type);
         }
-        
+
         /**
          * Apply patches using reflection, based on the settings
          */
@@ -44,10 +45,10 @@ namespace AquaMai
                 {
                     // The property should be a boolean
                     if (settingProp.PropertyType != typeof(bool)) continue;
-                    
+
                     // Check if the boolean value is true
-                    if (!(bool) settingProp.GetValue(categoryValue)) continue;
-                    
+                    if (!(bool)settingProp.GetValue(categoryValue)) continue;
+
                     // Get the Type from the config directive name
                     var directiveType = Type.GetType($"AquaMai.{categoryProp.Name}.{settingProp.Name}");
 
@@ -57,8 +58,8 @@ namespace AquaMai
                 }
             }
         }
-        
-        public override void OnInitializeMelon() 
+
+        public override void OnInitializeMelon()
         {
             MelonLogger.Msg("Loading mod settings...");
 
@@ -71,17 +72,29 @@ namespace AquaMai
 
             // Read AquaMai.toml to load settings
             AppConfig = TomletMain.To<Config>(System.IO.File.ReadAllText("AquaMai.toml"));
-            
-            // Apply patches based on the settings
-            ApplyPatches();
-            
+
+            // Migrate old settings
+            AppConfig.UX.LoadAssetsPng = AppConfig.UX.LoadAssetsPng || AppConfig.UX.LoadJacketPng;
+            AppConfig.UX.LoadJacketPng = false;
+
             // Fixes that does not have side effects
             // These don't need to be configurable
+
+            // Helpers
+            Patch(typeof(MessageHelper));
+            Patch(typeof(MusicDirHelper));
+            Patch(typeof(SharedInstances));
+            // Fixes
             Patch(typeof(FixCharaCrash));
-            Patch(typeof(CustomVersionString));
-            Patch(typeof(DisableReboot));
-            Patch(typeof(RunCommandOnEvents));
             Patch(typeof(BasicFix));
+            Patch(typeof(DisableReboot));
+            // UX
+            Patch(typeof(CustomVersionString));
+            Patch(typeof(CustomPlaceName));
+            Patch(typeof(RunCommandOnEvents));
+
+            // Apply patches based on the settings
+            ApplyPatches();
 
             MelonLogger.Msg("Loaded!");
         }
