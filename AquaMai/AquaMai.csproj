@@ -291,9 +291,12 @@
     <Compile Include="Config.cs" />
     <Compile Include="Fix\BasicFix.cs" />
     <Compile Include="Fix\DisableReboot.cs" />
+    <Compile Include="Fix\ExtendNotesPool.cs" />
     <Compile Include="Fix\FixCharaCrash.cs" />
+    <Compile Include="Fix\FixCheckAuth.cs" />
     <Compile Include="Fix\ForceAsServer.cs" />
     <Compile Include="Fix\ForceFreePlay.cs" />
+    <Compile Include="Fix\ForcePaidPlay.cs" />
     <Compile Include="Fix\RemoveEncryption.cs" />
     <Compile Include="Fix\SkipVersionCheck.cs" />
     <Compile Include="Helpers\MessageHelper.cs" />
@@ -302,6 +305,9 @@
     <Compile Include="Performance\ImproveLoadSpeed.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Main.cs" />
+    <Compile Include="TouchSensitivity\Enable.cs" />
+    <Compile Include="Utils\JudgeAdjust.cs" />
+    <Compile Include="Utils\LogUserId.cs" />
     <Compile Include="UX\CustomPlaceName.cs" />
     <Compile Include="UX\CustomVersionString.cs" />
     <Compile Include="UX\DemoMaster.cs" />
@@ -323,11 +329,11 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
-    <None Include="AquaMai.zh.toml" />
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="AquaMai.toml" />
+    <EmbeddedResource Include="AquaMai.zh.toml" WithCulture="false" />
+    <EmbeddedResource Include="AquaMai.toml" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="FodyWeavers.xml" />
