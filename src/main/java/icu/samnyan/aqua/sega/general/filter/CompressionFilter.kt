@@ -1,6 +1,9 @@
 package icu.samnyan.aqua.sega.general.filter
 
+import ext.details
 import ext.logger
+import ext.toJson
+import icu.samnyan.aqua.sega.allnet.TokenChecker
 import icu.samnyan.aqua.sega.util.ZLib
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
@@ -18,7 +21,7 @@ import java.util.*
 @Component
 class CompressionFilter : OncePerRequestFilter() {
     companion object {
-        val logger = logger()
+        val log = logger()
         val b64d = Base64.getMimeDecoder()
         val b64e = Base64.getMimeEncoder()
     }
@@ -28,16 +31,35 @@ class CompressionFilter : OncePerRequestFilter() {
         val isDfi = req.getHeader("pragma") == "DFI"
 
         // Decode input
-        val reqSrc = req.inputStream.readAllBytes().let {
-            if (isDeflate) ZLib.decompress(it)
-            else if (isDfi) ZLib.decompress(b64d.decode(it))
-            else it
+        val reqSrc = try {
+            req.inputStream.readAllBytes().let {
+                if (isDeflate) ZLib.decompress(it)
+                else if (isDfi) ZLib.decompress(b64d.decode(it))
+                else it
+            }
+        } catch (e: Exception) {
+            log.error("Failed to decode request from ip ${req.remoteAddr}")
+            resp.sendError(400, "Failed to decode request")
+            return
         }
 
         // Handle request
-        val result = ContentCachingResponseWrapper(resp).run {
-            chain.doFilter(CompressRequestWrapper(req, reqSrc), this)
-            ZLib.compress(contentAsByteArray).let { if (isDfi) b64e.encode(it) else it }
+        val respW = ContentCachingResponseWrapper(resp)
+        val result = try {
+            chain.doFilter(CompressRequestWrapper(req, reqSrc), respW)
+            ZLib.compress(respW.contentAsByteArray).let { if (isDfi) b64e.encode(it) else it }
+        } finally {
+            if (respW.status != 200) {
+                val details = mapOf(
+                    "req" to req.details(),
+                    "resp" to respW.details(),
+                    "body" to reqSrc.toString(Charsets.UTF_8),
+                    "result" to respW.contentAsByteArray.toString(Charsets.UTF_8),
+                    "token" to TokenChecker.getCurrentSession()?.token
+                ).toJson()
+
+                log.error("HTTP ${respW.status}: $details")
+            }
         }
 
         // Write response
@@ -51,13 +73,11 @@ class CompressionFilter : OncePerRequestFilter() {
         try {
             resp.outputStream.use { it.write(result); it.flush() }
         } catch (e: EofException) {
-            logger.warn("- EOF: Client closed connection when writing result")
+            log.warn("- EOF: Client closed connection when writing result")
         }
     }
 
-    /**
-     * Filter games that are not diva
-     */
+    /** Only games (other than WACCA) require response compression */
     override fun shouldNotFilter(req: HttpServletRequest) =
         !(req.servletPath.startsWith("/g/") && !req.servletPath.startsWith("/g/wacca"))
 }

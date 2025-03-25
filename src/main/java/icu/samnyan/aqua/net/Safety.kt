@@ -1,7 +1,7 @@
 package icu.samnyan.aqua.net
 
 import ext.HTTP
-import ext.async
+import ext.mut
 import ext.toJson
 import icu.samnyan.aqua.net.games.BaseEntity
 import io.ktor.client.call.*
@@ -50,25 +50,33 @@ class AquaNetSafetyService(
     val safety: AquaNetSafetyRepo,
     val openAIConfig: OpenAIConfig
 ) {
-    suspend fun isSafe(rawContent: String): Boolean {
-        // NFKC normalize
-        val content = Normalizer.normalize(rawContent, Normalizer.Form.NFKC)
-        if (content.isBlank()) return true
+    /**
+     * It is very inefficient to have query inside a loop, so we batch the query.
+     */
+    suspend fun isSafeBatch(rawContents: List<String>): List<Boolean> {
+        val contents = rawContents.map { Normalizer.normalize(it, Normalizer.Form.NFKC) }
+        val origMap = safety.findAll().associateBy { it.content }.mut
+        val map = safety.findAll().associateBy { it.content.lowercase().trim() }.mut
 
-        async { safety.findByContent(content) }?.let { return it.safe }
-
-        // Query OpenAI
-        HTTP.post("https://api.openai.com/v1/moderations") {
-            header("Authorization", "Bearer ${openAIConfig.apiKey}")
-            header("Content-Type", "application/json")
-            setBody(mapOf("input" to content).toJson())
-        }.let {
-            if (!it.status.isSuccess()) return true
-            val body = it.body<OpenAIResp<OpenAIMod>>()
-            return AquaNetSafety().apply {
-                this.content = content
-                this.safe = !body.results.first().flagged
-            }.also { safety.save(it) }.safe
+        // Process unseen content with OpenAI
+        val news = contents.filter { it.lowercase().trim() !in map && it !in contents }.map { inp ->
+            HTTP.post("https://api.openai.com/v1/moderations") {
+                header("Authorization", "Bearer ${openAIConfig.apiKey}")
+                header("Content-Type", "application/json")
+                setBody(mapOf("input" to inp).toJson())
+            }.let {
+                if (!it.status.isSuccess()) throw Exception("OpenAI request failed for $inp")
+                val body = it.body<OpenAIResp<OpenAIMod>>()
+                AquaNetSafety().apply {
+                    content = inp
+                    safe = !body.results.first().flagged
+                }
+            }
         }
+        if (news.isNotEmpty()) safety.saveAll(news)
+        news.associateByTo(origMap) { it.content }
+        news.associateByTo(map) { it.content.lowercase().trim() }
+
+        return contents.map { map[it.lowercase().trim()]?.safe ?: origMap[it]?.safe ?: true }
     }
 }

@@ -2,61 +2,37 @@
 
 <script lang="ts">
   import { slide } from "svelte/transition";
-  import { DATA_HOST } from "../libs/config";
   import { t } from "../libs/i18n";
-  import { type GameName, getMult, roundFloor } from "../libs/scoring";
+  import { type GameName, type ParsedComposition, roundFloor } from "../libs/scoring";
   import { coverNotFound } from "../libs/ui";
-  import type { MusicMeta } from "../libs/generalTypes";
   import { tooltip } from "../libs/ui";
   import useLocalStorage from "../libs/hooks/useLocalStorage.svelte";
 
-  export let g: string
-  export let meta: MusicMeta
   export let game: GameName
-
-  let mapData = g.split(":").map(Number)
-  let mult = getMult(mapData[3], game)
-  let mapRank: number | undefined = meta?.notes?.[mapData[1] === 10 ? 0 : mapData[1]]?.lv
-  const rounding = useLocalStorage("rounding", true);
-
-  console.log(rounding.value)
-
-  let gameIndexMap = {
-  'mai2': 3,
-  'ongeki': 2,
-  'chu3': 2
-  };
-
-  let gameIndex = gameIndexMap[game as keyof typeof gameIndexMap];
-  </script>
+  export let p: ParsedComposition
+  const rounding = useLocalStorage("rounding", true)
+</script>
 
 <div class="map-detail-container" transition:slide>
   <div class="scores">
     <div>
-      <img src={`${DATA_HOST}/d/${game}/music/00${mapData[0].toString().padStart(6, '0').substring(2)}.png`} alt="" on:error={coverNotFound} />
+      <img src={p.img} alt="" on:error={coverNotFound} />
       <div class="info">
         <div class="first-line">
-          <div class="song-title">{meta?.name ?? t("UserHome.UnknownSong")}</div>
-          <span class={`lv level-${mapData[1] === 10 ? 3 : mapData[1]}`}>
-            { mapRank ?? '-' }
+          <div class="song-title">{p.name ?? t("UserHome.UnknownSong")}</div>
+          <span class={`lv level-${p.diffId === 10 ? 3 : p.diffId}`}>
+            { p.difficulty ?? '-' }
           </span>
         </div>
         <div class="second-line">
-          <span class={`rank-${getMult(mapData[gameIndex], game)[2].toString()[0]}`}>
-
-            <span class="rank-text">{("" + getMult(mapData[gameIndex], game)[2]).replace("p", "+")}</span>
-            <span class="rank-num" use:tooltip={(mapData[gameIndex] / 10000).toFixed(4)}>
-              {
-                rounding.value ?
-                  roundFloor(mapData[gameIndex], game, 1) :
-                  (mapData[gameIndex] / 10000).toFixed(4)
-              }%
+          <span class={`rank-${p.rank[0]}`}>
+            <span class="rank-text">{p.rank.replace("p", "+")}</span>
+            <span class="rank-num" use:tooltip={(p.score / 10000).toFixed(4)}>
+              {rounding.value ? roundFloor(p.score, game, 1) : (p.score / 10000).toFixed(4)}%
             </span>
           </span>
-          {#if game === 'mai2'}
-            <span class="dx-change">
-              { mapRank ? Math.floor(mapRank * mult[1] * (Math.min(100.5, mapData[3] / 10000) / 100)) : '-' }
-            </span>
+          {#if p.ratingChange !== undefined}
+            <span class="dx-change">{ p.ratingChange }</span>
           {/if}
         </div>
       </div>
@@ -66,19 +42,19 @@
 
 <style lang="sass">
 
-  @import "../vars"
-  $gap: 20px
+  @use "../vars"
+  vars.$gap: 20px
 
   .map-detail-container
     background-color: rgb(35,35,35)
-    border-radius: $border-radius
+    border-radius: vars.$border-radius
     overflow: hidden
 
     .scores
       display: flex
       flex-direction: column
       flex-wrap: wrap
-      gap: $gap
+      gap: vars.$gap
 
       // Image and song info
       > div
@@ -91,7 +67,7 @@
         img
           width: 50px
           height: 50px
-          border-radius: $border-radius
+          border-radius: vars.$border-radius
           object-fit: cover
 
         // Song info and score
@@ -118,7 +94,7 @@
           > div:last-child
             white-space: nowrap
 
-          @media (max-width: $w-mobile)
+          @media (max-width: vars.$w-mobile)
             flex-direction: column
             gap: 0
 
@@ -127,7 +103,7 @@
 
         .rank-S
           // Gold green gradient on text
-          background: $grad-special
+          background: vars.$grad-special
           -webkit-background-clip: text
           color: transparent
 
@@ -142,7 +118,7 @@
           text-align: center
           background: rgba(var(--lv-color), 0.6)
           padding: 0 6px
-          border-radius: 0 $border-radius 0 $border-radius
+          border-radius: 0 vars.$border-radius 0 vars.$border-radius
 
           // Inset shadow, like it's a paper below this card with a cut
           box-shadow: inset 0 0 10px rgba(0,0,0,0.5)
@@ -163,5 +139,5 @@
           min-width: 60px
         span.dx-change
           margin-right: 0.5rem
-          color: $c-good
+          color: vars.$c-good
 </style>

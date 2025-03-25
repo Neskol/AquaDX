@@ -4,6 +4,7 @@ import ext.*
 import icu.samnyan.aqua.net.db.AquaGameOptions
 import icu.samnyan.aqua.net.games.wacca.Wacca
 import icu.samnyan.aqua.net.utils.ApiException
+import icu.samnyan.aqua.net.utils.simpleDescribe
 import icu.samnyan.aqua.sega.general.dao.CardRepository
 import icu.samnyan.aqua.sega.wacca.WaccaItemType.*
 import icu.samnyan.aqua.sega.wacca.WaccaItemType.NOTE_COLOR
@@ -12,6 +13,7 @@ import icu.samnyan.aqua.sega.wacca.WaccaItemType.TOUCH_EFFECT
 import icu.samnyan.aqua.sega.wacca.WaccaOptionType.*
 import icu.samnyan.aqua.sega.wacca.model.BaseRequest
 import icu.samnyan.aqua.sega.wacca.model.db.*
+import icu.samnyan.aqua.spring.Metrics
 import io.ktor.client.utils.*
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.beans.factory.annotation.Autowired
@@ -20,8 +22,6 @@ import org.springframework.web.bind.annotation.RestController
 import java.util.*
 import kotlin.math.max
 import kotlin.math.min
-
-val empty = emptyList<Any>()
 
 @RestController
 @API("/g/wacca/")
@@ -71,7 +71,7 @@ class WaccaServer {
             """"maintNoticeTime":0,"maintNotPlayableTime":0,"maintStartTime":0,"params":$paramsJson}"""
 
         return ResponseEntity.ok().headers(
-            "X-Wacca-Hash" to resp.md5(),
+            "X-Wacca-Hash" to resp.md5().hexStr,
             "Content-Type" to "application/json; charset=utf-8"
         ).body(resp)
     }
@@ -79,25 +79,42 @@ class WaccaServer {
     /** Handle all requests */
     @API("/api/**")
     fun handle(req: HttpServletRequest, @RB body: String): Any {
-        return try {
-            val path = req.requestURI.removePrefix("/g/wacca").removePrefix("/WaccaServlet")
-                .removePrefix("/api").removePrefix("/").lowercase()
-            if (path in cacheMap) return resp(cacheMap[path]!!)
-            if (path !in handlerMap) return resp("[]", 1, "Not Found")
+        // Normalize path
+        val path = req.requestURI.removePrefix("/g/wacca").removePrefix("/WaccaServlet")
+            .removePrefix("/api").removePrefix("/").lowercase()
 
-            log.info("Wacca < $path : $body")
-
-            val br = JACKSON.parse<BaseRequest>(body)
-            handlerMap[path]!!(br, br.params).let { when (it) {
-                is String -> resp(it)
-                is List<*> -> resp(it.toJson())
-                else -> error("Invalid response type ${it.javaClass}")
-            } }.also { log.info("Wacca > $path : ${it.body}") }
+        if (path !in cacheMap && path !in handlerMap) {
+            return resp("[]", 1, "Not Found")
         }
-        catch (e: ApiException) { resp("[]", e.code, e.message ?: "") }
-        catch (e: Exception) {
-            log.error("Wacca > Error", e)
-            resp("[]", 500, e.message ?: "")
+
+        // Only record the counter metrics if the API is known.
+        Metrics.counter("aquadx_wacca_api_call", "api" to path).increment()
+
+        if (path in cacheMap) return resp(cacheMap[path]!!)
+
+        log.info("Wacca < $path : $body")
+
+        return try {
+            Metrics.timer("aquadx_wacca_api_latency", "api" to path).recordCallable {
+                val br = JACKSON.parse<BaseRequest>(body)
+                handlerMap[path]!!(br, br.params).let { when (it) {
+                    is String -> resp(it)
+                    is List<*> -> resp(it.toJson())
+                    else -> error("Invalid response type ${it.javaClass}")
+                } }.also { log.info("Wacca > $path : ${it.body}") }
+            }
+        } catch (e: Exception) {
+            Metrics.counter(
+                "aquadx_wacca_api_error",
+                "api" to path, "error" to e.simpleDescribe()
+            ).increment()
+
+            if (e is ApiException) {
+                resp("[]", e.code, e.message ?: "")
+            } else {
+                log.error("Wacca > Error", e)
+                resp("[]", 500, e.message ?: "")
+            }
         }
     }
 }
@@ -179,7 +196,7 @@ fun WaccaServer.init() {
     "user/status/GetDetail" api@ { _, (uid) ->
         val u = user(uid) ?: return@api "[]"
         val o = options(u)
-        val items = rp.item.findByUser(u).groupBy { it.type }.toMutableMap()
+        val items = rp.item.findByUser(u).groupBy { it.type }.mut
         val scores = rp.bestScore.findByUser(u)
         val scoreMap = scores.associateBy { it.musicId to it.level }
         val gates = rp.gate.findByUser(u)
@@ -326,7 +343,7 @@ fun WaccaServer.init() {
             ?: WcUserScore().apply { user = u; musicId = pl.musicId; level = pl.level }).apply {
 
             grades[WaccaGrades.valueMap[pl.grade]?.ordinal ?: (400 - "Grade ${pl.grade} invalid")]++
-            clears = clears.zip(pl.clears()) { a, b -> a + b }.toMutableList()
+            clears = clears.zip(pl.clears()) { a, b -> a + b }.mut
             achievement = max(achievement, pl.achievement)
             bestCombo = max(bestCombo, pl.maxCombo)
             lowestMissCt = min(lowestMissCt, pl.judgements[3])
@@ -408,7 +425,7 @@ fun WaccaServer.init() {
 
     "user/status/update" empty { req, (uid, playType, items, isContinue, isFirstPlayFree, itemsUsed, lastSong) ->
         val u = user(uid) ?: (404 - "User not found")
-        u.lastSongInfo = (lastSong as List<Int>).toMutableList()
+        u.lastSongInfo = (lastSong as List<Int>).mut
         afterPlay(u, items as List<List<Int>>, playType.int(), req.appVersion)
     }
 
@@ -445,7 +462,7 @@ fun WaccaServer.init() {
             clearStatus = clearType.int() // 0..3: Fail, Blue, Silver, Gold
             clearSongCt = clearCt.int()
             playCt++
-            if (scores.sum() > s.songScores.sum()) songScores = scores.toMutableList()
+            if (scores.sum() > s.songScores.sum()) songScores = scores.mut
         })
 
         if (dan.int() > u.danLevel || (dan.int() == u.danLevel && clearType.int() > u.danType)) {

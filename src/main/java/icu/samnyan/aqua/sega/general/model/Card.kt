@@ -48,3 +48,5 @@ class Card(
     @Suppress("unused") // Used by serialization
     val isLinked get() = aquaUser != null
 }
+
+fun Card.sensitiveInfo() = mapOf("id" to id, "extId" to extId, "luid" to luid)

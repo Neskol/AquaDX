@@ -1,13 +1,9 @@
 package icu.samnyan.aqua.sega.maimai2.handler
 
-import ext.div
-import ext.isoDateTime
-import ext.path
+import ext.*
 import icu.samnyan.aqua.sega.general.BaseHandler
-import icu.samnyan.aqua.sega.maimai2.model.request.UploadUserPhoto
+import icu.samnyan.aqua.sega.maimai2.model.request.Mai2UserPhoto
 import icu.samnyan.aqua.sega.util.jackson.BasicMapper
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.io.IOException
 import java.nio.file.Files
@@ -19,16 +15,12 @@ import java.util.*
 @Component("Maimai2UploadUserPhotoHandler")
 class UploadUserPhotoHandler(private val mapper: BasicMapper) :
     BaseHandler {
-    val tmpDir = "data/tmp".path().apply { toFile().mkdirs() }
-    val uploadDir = "data/upload/mai2/plays".path().apply { toFile().mkdirs() }
 
     override fun handle(request: Map<String, Any>): String {
         // Maimai DX sends split base64 data for one jpeg image.
         // So, make a temp file and keep append bytes until last part received.
         // If finished, rename it to other name so user can keep save multiple scorecards in a single day.
-
-        val uploadUserPhoto = mapper.convert(request, UploadUserPhoto::class.java)
-        val up = uploadUserPhoto.userPhoto
+        val up = parsing { mapper.convert(request["userPhoto"]!!, Mai2UserPhoto::class.java) }
 
         try {
             val tmpFile = tmpDir / "${up.userId}-${up.trackNo}.tmp"
@@ -47,6 +39,9 @@ class UploadUserPhotoHandler(private val mapper: BasicMapper) :
     }
 
     companion object {
-        private val logger: Logger = LoggerFactory.getLogger(UploadUserPhotoHandler::class.java)
+        private val logger = logger()
+
+        val tmpDir = "data/tmp".path().apply { toFile().mkdirs() }
+        val uploadDir = "data/upload/mai2/plays".path().apply { toFile().mkdirs() }
     }
 }

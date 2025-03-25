@@ -38,7 +38,7 @@
 
   {#if d}
     <div class="leaderboard-container">
-      <div class="lb-user" on:mouseenter={() => hoveringUser = d.users[0].username}>
+      <div class="lb-user" on:mouseenter={() => hoveringUser = d.users[0].username} role="heading" aria-level="2">
         <span class="rank">{t("Leaderboard.Rank")}</span>
         <span class="name"></span>
         <span class="rating">{t("Leaderboard.Rating")}</span>
@@ -47,7 +47,9 @@
         <span class="ap">{t("Leaderboard.AP")}</span>
       </div>
       {#each d.users as user, i (user.rank)}
-        <div class="lb-user" class:alternate={i % 2 === 1} on:mouseover={() => hoveringUser = user.username}>
+        <div class="lb-user" class:alternate={i % 2 === 1} role="listitem"
+          on:mouseover={() => hoveringUser = user.username} on:focus={() => {}}>
+
           <span class="rank">#{user.rank}</span>
           <span class="name">
             {#if user.username !== ""}
@@ -57,7 +59,7 @@
             {/if}
           </span>
           <span class="rating">{
-            game === 'chu3' ?
+            game === 'chu3' || game === 'ongeki' ?
               (user.rating / 100).toFixed(2) :
               user.rating.toLocaleString()
           }</span>
@@ -77,7 +79,7 @@
 </main>
 
 <style lang="sass">
-  @import "../vars"
+  @use "../vars"
 
   .leaderboard-container
     display: flex
@@ -89,7 +91,7 @@
     justify-content: space-between
     width: 100%
     gap: 12px
-    border-radius: $border-radius
+    border-radius: vars.$border-radius
     padding: 6px 12px
     box-sizing: border-box
 
@@ -104,7 +106,7 @@
         color: unset
 
       .registered
-        background: $grad-special
+        background: vars.$grad-special
         color: transparent
         -webkit-background-clip: text
         background-clip: text
@@ -121,14 +123,14 @@
       width: 5%
       min-width: 20px
 
-    @media (max-width: $w-mobile)
+    @media (max-width: vars.$w-mobile)
       font-size: 0.9rem
 
       .accuracy
         display: none
 
     &.alternate
-      background-color: $ov-light
+      background-color: vars.$ov-light
 
 
 </style>

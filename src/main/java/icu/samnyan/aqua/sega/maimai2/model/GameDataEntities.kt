@@ -6,7 +6,6 @@ import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.Table
 import lombok.Data
-import java.time.LocalDateTime
 
 @Data @Entity
 @Table(name = "maimai2_game_event")
@@ -20,6 +19,7 @@ class Mai2GameEvent : BaseEntity() {
 
     @JsonIgnore
     var enable = false
+    var disableArea = ""
 }
 
 @Data @Entity
@@ -37,8 +37,8 @@ class Mai2GameCharge : BaseEntity() {
 @Table(name = "maimai2_game_selling_card")
 class Mai2GameSellingCard : BaseEntity() {
     var cardId = 0L
-    var startDate: LocalDateTime? = null
-    var endDate: LocalDateTime? = null
-    var noticeStartDate: LocalDateTime? = null
-    var noticeEndDate: LocalDateTime? = null
+    var startDate: String? = null
+    var endDate: String? = null
+    var noticeStartDate: String? = null
+    var noticeEndDate: String? = null
 }

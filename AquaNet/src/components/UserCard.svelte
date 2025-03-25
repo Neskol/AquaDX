@@ -23,7 +23,7 @@
   <div>Error: {error}</div>
 {:else}
   <div class="user-card">
-    <img use:pfp={data.aquaUser} alt="Profile Picture" />
+    <img use:pfp={data.aquaUser} alt="Profile" />
     <div class="details">
       <span class="in-game-name">{data.name}</span>
       <span class="username">@{username}</span>
@@ -32,12 +32,12 @@
 {/if}
 
 <style lang="sass">
-@import "../vars"
+@use "../vars"
 
 .user-card
   display: flex
   align-items: center
-  gap: $gap
+  gap: vars.$gap
 
   .details
     display: flex

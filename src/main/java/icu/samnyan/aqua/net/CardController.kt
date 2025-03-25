@@ -13,10 +13,14 @@ import icu.samnyan.aqua.sega.general.model.Card
 import icu.samnyan.aqua.sega.general.service.CardService
 import icu.samnyan.aqua.sega.maimai2.model.Mai2UserDataRepo
 import icu.samnyan.aqua.sega.wacca.model.db.WcUserRepo
+import jakarta.persistence.EntityManager
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.web.bind.annotation.RestController
+import java.time.LocalDateTime
+import java.time.ZoneOffset
 import kotlin.jvm.optionals.getOrNull
+import kotlin.random.Random
 
 @RestController
 @API("/api/v2/card")
@@ -34,10 +38,12 @@ class CardController(
 
     @API("/summary")
     @Doc("Get a summary of the card, including the user's name, rating, and last login date.", "Summary of the card")
-    suspend fun summary(@RP cardId: Str): Any
-    {
+    suspend fun summary(@RP cardId: Str, @RP token: Str): Any {
+        val user = jwt.auth(token)
         // DO NOT CHANGE THIS ERROR MESSAGE - The frontend uses it to detect if the card is not found
         val card = cardService.tryLookup(cardId) ?: (404 - "Card not found")
+
+        if (card.aquaUser != null && card.aquaUser?.auId != user.auId) (404 - "Card not found")
 
         // Lookup data for each game
         return mapOf(
@@ -130,12 +136,21 @@ class CardController(
  *
  * Assumption: The card is already linked to the user.
  */
-suspend fun <T : IUserData> migrateCard(repo: GenericUserDataRepo<T>, card: Card): Bool
-{
+suspend fun <T : IUserData> migrateCard(repo: GenericUserDataRepo<T>, cardRepo: CardRepository, card: Card): Bool {
+    val ghost = card.aquaUser!!.ghostCard
+
     // Check if data already exists in the user's ghost card
-    async { repo.findByCard(card.aquaUser!!.ghostCard) }?.let {
-        // Unbind the data from the card
-        it.card = null
+    async { repo.findByCard(ghost) }?.let {
+        // Create a new dummy card for deleted data
+        it.card = async {
+            cardRepo.save(Card().apply {
+                luid = "Migrated data of ghost card ${ghost.id} for user ${card.aquaUser!!.auId} on ${LocalDateTime.now(ZoneOffset.UTC).isoDateTime()}"
+                // Randomize an extId outside the normal range
+                extId = Random.nextLong(0x7FFFFFF7L shl 32, 0x7FFFFFFFL shl 32)
+                registerTime = LocalDateTime.now()
+                accessTime = registerTime
+            })
+        }
         async { repo.save(it) }
     }
 
@@ -147,8 +162,7 @@ suspend fun <T : IUserData> migrateCard(repo: GenericUserDataRepo<T>, card: Card
     return true
 }
 
-suspend fun getSummaryFor(repo: GenericUserDataRepo<*>, card: Card): Map<Str, Any>?
-{
+suspend fun getSummaryFor(repo: GenericUserDataRepo<*>, card: Card): Map<Str, Any>? {
     val data = async { repo.findByCard(card) } ?: return null
     return mapOf(
         "name" to data.userName,
@@ -165,7 +179,8 @@ class CardGameService(
     val ongeki: icu.samnyan.aqua.sega.ongeki.dao.userdata.UserDataRepository,
     val diva: icu.samnyan.aqua.sega.diva.dao.userdata.PlayerProfileRepository,
     val safety: AquaNetSafetyService,
-    val cardRepo: CardRepository
+    val cardRepo: CardRepository,
+    val em: EntityManager
 ) {
     companion object {
         val log = logger()
@@ -176,10 +191,10 @@ class CardGameService(
         // An easy migration is to change the UserData card field to the user's ghost card
         games.forEach { game ->
             when (game) {
-                "mai2" -> migrateCard(maimai2, crd)
-                "chu3" -> migrateCard(chusan, crd)
-                "ongeki" -> migrateCard(ongeki, crd)
-                "wacca" -> migrateCard(wacca, crd)
+                "mai2" -> migrateCard(maimai2, cardRepo, crd)
+                "chu3" -> migrateCard(chusan, cardRepo, crd)
+                "ongeki" -> migrateCard(ongeki, cardRepo, crd)
+                "wacca" -> migrateCard(wacca, cardRepo, crd)
                 // TODO: diva
 //                "diva" -> diva.findByPdId(card.extId.toInt()).getOrNull()?.let {
 //                    it.pdId = card.aquaUser!!.ghostCard
@@ -188,33 +203,39 @@ class CardGameService(
         }
     }
 
-    suspend fun getSummary(card: Card) = async { mapOf(
-        "mai2" to getSummaryFor(maimai2, card),
-        "chu3" to getSummaryFor(chusan, card),
-        "ongeki" to getSummaryFor(ongeki, card),
-        "wacca" to getSummaryFor(wacca, card),
-        "diva" to diva.findByPdId(card.extId).getOrNull()?.let {
-            mapOf(
-                "name" to it.playerName,
-                "rating" to it.level,
-            )
-        },
-    ) }
+    suspend fun getSummary(card: Card) = async {
+        mapOf(
+            "mai2" to getSummaryFor(maimai2, card),
+            "chu3" to getSummaryFor(chusan, card),
+            "ongeki" to getSummaryFor(ongeki, card),
+            "wacca" to getSummaryFor(wacca, card),
+            "diva" to diva.findByPdId(card.extId).getOrNull()?.let {
+                mapOf(
+                    "name" to it.playerName,
+                    "rating" to it.level,
+                )
+            },
+        )
+    }
 
     // Every hour
     @Scheduled(fixedDelay = 3600000)
     suspend fun autoBan() {
         log.info("Running auto-ban")
+        val time = millis()
 
         // Ban any players with unacceptable names
         for (repo in listOf(maimai2, chusan, wacca, ongeki)) {
-            repo.findAll().filter { it.card != null && !it.card!!.rankingBanned }.forEach { data ->
-                if (!safety.isSafe(data.userName)) {
-                    log.info("Banning user ${data.userName} ${data.card!!.id}")
-                    data.card!!.rankingBanned = true
-                    async { cardRepo.save(data.card!!) }
-                }
+            val all = async { repo.findAllNonBanned() }
+            val isSafe = safety.isSafeBatch(all.map { it.userName })
+            val toSave = all.filterIndexed { i, _ -> !isSafe[i] }.mapNotNull { it.card }
+            if (toSave.isNotEmpty()) {
+                log.info("Banning users ${toSave.joinToString(", ")}")
+                toSave.forEach { it.rankingBanned = true }
+                async { cardRepo.saveAll(toSave) }
             }
         }
+
+        log.info("Auto-ban completed in ${millis() - time}ms")
     }
 }

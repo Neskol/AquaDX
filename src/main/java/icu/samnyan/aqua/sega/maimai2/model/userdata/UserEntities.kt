@@ -8,12 +8,14 @@ import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.annotation.JsonPropertyOrder
 import icu.samnyan.aqua.net.games.BaseEntity
 import icu.samnyan.aqua.net.games.IGenericGamePlaylog
+import icu.samnyan.aqua.net.games.IGenericUserMusic
 import icu.samnyan.aqua.net.games.IUserEntity
 import icu.samnyan.aqua.sega.general.IntegerListConverter
 import jakarta.persistence.*
 import lombok.AllArgsConstructor
 import lombok.Data
 import lombok.NoArgsConstructor
+import java.time.LocalDateTime
 
 @MappedSuperclass
 open class Mai2UserEntity : BaseEntity(), IUserEntity<Mai2UserDetail> {
@@ -165,7 +167,7 @@ class Mai2UserExtend : Mai2UserEntity() {
     @Convert(converter = IntegerListConverter::class)
     var selectedCardList: List<Int> = ArrayList()
 
-    @OneToMany(mappedBy = "userExtend")
+    @OneToMany(mappedBy = "userExtend", targetEntity = Mai2MapEncountNpc::class)
     var encountMapNpcList: List<Mai2MapEncountNpc> = ArrayList()
 }
 
@@ -294,9 +296,9 @@ class Mai2UserMap : Mai2UserEntity() {
 
 @Table(name = "maimai2_user_music_detail")
 @Data @Entity
-class Mai2UserMusicDetail : Mai2UserEntity() {
+class Mai2UserMusicDetail : Mai2UserEntity(), IGenericUserMusic {
 
-    var musicId = 0
+    override var musicId = 0
     var level = 0
     var playCount = 0
     var achievement = 0
@@ -505,6 +507,8 @@ class Mai2UserPlaylog : Mai2UserEntity(), IGenericGamePlaylog {
 
     @JsonProperty("extBool1")
     var extBool1 = false
+    @JsonProperty("extBool2")
+    var extBool2 = false
 
     override val isFullCombo: Boolean
         get() = maxCombo == totalCombo
@@ -572,4 +576,32 @@ class Mai2UserUdemae : Mai2UserEntity() {
     var npcMaxLoseNum = 0
     var npcWinNum = 0
     var npcLoseNum = 0
+}
+
+@Table(name = "maimai2_user_kaleidx")
+@Data @Entity
+class Mai2UserKaleidx : Mai2UserEntity() {
+    var gateId = 1
+    var isGateFound = true
+    var isKeyFound = true
+    var isClear = false
+    var totalRestLife = 0
+    var totalAchievement = 0
+    var totalDeluxscore = 0
+    var bestAchievement = 0
+    var bestDeluxscore = 0
+    var bestAchievementDate: LocalDateTime? = null
+    var bestDeluxscoreDate: LocalDateTime? = null
+    var playCount = 0
+    var clearDate: LocalDateTime? = null
+    var lastPlayDate: LocalDateTime? = null
+    var isInfoWatched = false
+}
+
+@Table(name = "maimai2_user_intimate")
+@Data @Entity
+class Mai2UserIntimate : Mai2UserEntity() {
+    var partnerId = 1;
+    var intimateLevel = 0;
+    var intimateCountRewarded = 0;
 }

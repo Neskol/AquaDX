@@ -2,12 +2,12 @@
 
 <script lang="ts">
   import { fade, slide } from "svelte/transition"
-  import type { Card, CardSummary, CardSummaryGame, ConfirmProps, AquaNetUser } from "../../libs/generalTypes";
-  import { CARD, USER } from "../../libs/sdk";
+  import type { Card, CardSummary, CardSummaryGame, ConfirmProps, AquaNetUser } from "../../libs/generalTypes"
+  import { CARD, USER } from "../../libs/sdk"
   import moment from "moment"
-  import Icon from "@iconify/svelte";
-  import StatusOverlays from "../../components/StatusOverlays.svelte";
-  import { t } from "../../libs/i18n";
+  import Icon from "@iconify/svelte"
+  import StatusOverlays from "../../components/StatusOverlays.svelte"
+  import { t } from "../../libs/i18n"
 
   // State
   let state: 'ready' | 'linking-AC' | 'linking-SN' | 'loading' = "loading"
@@ -42,14 +42,22 @@
   }
 
   async function doLink(id: string, migrate: string) {
-    await CARD.link({cardId: id, migrate})
-    await updateMe()
+    try {
+      await CARD.link({cardId: id, migrate})
+      await updateMe()
+      if (linkingType === 'AC') inputAC = ""
+      if (linkingType === 'SN') inputSN = ""
+    } catch (e) {
+      setError(e.message, linkingType)
+    }
     state = "ready"
   }
 
+  let linkingType: 'AC' | 'SN' = null
   async function link(type: 'AC' | 'SN') {
     if (state !== 'ready' || accountCardSummary === null) return
     state = "linking-" + type
+    linkingType = type
     const id = type === 'AC' ? inputAC : inputSN
 
     console.log("linking card", id)
@@ -64,7 +72,7 @@
     // First, lookup the card summary
     const card = (await CARD.summary(id).catch(e => {
       // If card is not found, create a card and link it
-      if (e.message === t('home.linkcard.notfound')) {
+      if (e.message === 'Card not found') {
         doLink(id, "")
         return
       }
@@ -156,40 +164,66 @@
     }
   }
 
+  function cursorPositionToCursorIndex(text: string, cursorPosition: number, effectiveCharsRegex: RegExp) {
+    const textBeforeCursor = text.slice(0, cursorPosition)
+    const ignoredChars = textBeforeCursor.replace(new RegExp(effectiveCharsRegex, "g"), "")
+    return textBeforeCursor.length - ignoredChars.length
+  }
+
+  function cursorIndexToCursorPosition(text: string, cursorIndex: number, effectiveCharsRegex: RegExp) {
+    let i = 0
+    while (i < text.length) {
+      while (i < text.length && !effectiveCharsRegex.test(text[i])) i++
+      if (cursorIndex === 0) break
+      cursorIndex--
+      i++
+    }
+    return i
+  }
+
   // Access code input
   const inputACRegex = /^(\d{4} ){0,4}\d{0,4}$/
+  let elemInputAC: HTMLInputElement
+  let inputOldAC = ""
   let inputAC = ""
   let errorAC = ""
+  let warningAC = ""
 
-  function inputACChange(e: any) {
-    e = e as InputEvent
+  function inputACChange() {
     // Add spaces to the input
-    const old = inputAC
-    if (e.inputType === "insertText" && inputAC.length % 5 === 4 && inputAC.length < 24)
-      inputAC += " "
-    inputAC = inputAC.slice(0, 24)
-    if (inputAC !== old) errorAC = ""
+    const cursorIndex = cursorPositionToCursorIndex(inputAC, elemInputAC.selectionStart, /\d/)
+    inputAC = inputAC.replace(/\D/g, '').replace(/(.{4})/g, '$1 ').replace(/ $/, '')
+    const cursorPosition = cursorIndexToCursorPosition(inputAC, cursorIndex, /\d/)
+    setTimeout(() => elemInputAC.selectionStart = elemInputAC.selectionEnd = cursorPosition, 0)
+    if (inputAC !== inputOldAC) errorAC = ""
+    warningAC = inputAC[0] === "5" ? t('home.linkcard.felica-ac-warning') : ""
+
+    inputOldAC = inputAC
   }
 
   // Serial number input
   const inputSNRegex = /^([0-9A-Fa-f]{0,2}:){0,7}[0-9A-Fa-f]{0,2}$/
+  let inputElemSN: HTMLInputElement
+  let inputOldSN = ""
   let inputSN = ""
   let errorSN = ""
 
-  function inputSNChange(e: any) {
-    e = e as InputEvent
+  function inputSNChange() {
     // Add colons to the input
-    const old = inputSN
-    if (e.inputType === "insertText" && inputSN.length % 3 === 2 && inputSN.length < 23)
-      inputSN += ":"
-    inputSN = inputSN.toUpperCase().slice(0, 23)
-    if (inputSN !== old) errorSN = ""
+    inputSN = inputSN.toUpperCase()
+    const cursorIndex = cursorPositionToCursorIndex(inputSN, inputElemSN.selectionStart, /[0-9A-F]/)
+    inputSN = inputSN.replace(/[^0-9A-F]/g, '').replace(/(.{2})/g, '$1:').replace(/:$/, '')
+    const cursorPosition = cursorIndexToCursorPosition(inputSN, cursorIndex, /[0-9A-F]/)
+    setTimeout(() => inputElemSN.selectionStart = inputElemSN.selectionEnd = cursorPosition, 0)
+    if (inputSN !== inputOldSN) errorSN = ""
+
+    inputOldSN = inputSN
   }
 
   function formatLUID(luid: string, ghost: boolean = false) {
     if (ghost) return luid.slice(0, 6) + " " + (luid.slice(6).match(/.{4}/g)?.join(" ") ?? "")
     switch (cardType(luid)) {
-      case "Felica SN":
+      case "FeliCa SN":
         return BigInt(luid).toString(16).toUpperCase().padStart(16, "0").match(/.{1,2}/g)!.join(":")
       case "Access Code":
         return luid.match(/.{4}/g)!.join(" ")
@@ -199,9 +233,9 @@
   }
 
   function cardType(luid: string) {
-    if (luid.startsWith("00")) return "Felica SN"
+    if (luid.startsWith("00")) return "FeliCa SN"
     if (luid.length === 20) return "Access Code"
-    if (luid.includes(":")) return "Felica SN"
+    if (luid.includes(":")) return "FeliCa SN"
     if (luid.includes(" ")) return "Access Code"
     return "Unknown"
   }
@@ -209,9 +243,29 @@
   function isInput(e: KeyboardEvent) {
     return e.key.length === 1 && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey
   }
+
+  async function dropFile(e: DragEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    const file = e.dataTransfer?.files[0]
+    if (!file) return
+    switch (file.name.toLowerCase()) {
+      case "aime.txt":
+        inputSN = ""
+        inputAC = await file.text()
+        inputACChange()
+        break
+      case "felica.txt":
+        inputAC = ""
+        inputSN = await file.text()
+        inputSNChange()
+        break
+    }
+  }
 </script>
 
-<div class="link-card">
+<!-- svelte-ignore a11y-no-static-element-interactions -->
+<div class="link-card" on:drop={dropFile} on:dragover={(e) => e.preventDefault()}>
   <h2>{t('home.linkcard.cards')}</h2>
   <p>{t('home.linkcard.description')}:</p>
 
@@ -222,7 +276,7 @@
           <span class="type">{card.isGhost ? t('home.linkcard.account-card') : cardType(card.luid)}</span>
           <span class="register">{t('home.linkcard.registered')}: {moment(card.registerTime).format("YYYY MMM DD")}</span>
           <span class="last">{t('home.linkcard.lastused')}: {moment(card.accessTime).format("YYYY MMM DD")}</span>
-          <div/>
+          <div></div>
           <span class="id">{formatLUID(card.luid, card.isGhost)}</span>
           {#if !card.isGhost}
             <button class="icon error" on:click={() => unlink(card)}><Icon icon="tabler:trash-x-filled"/></button>
@@ -239,7 +293,8 @@
   <p>{t('home.linkcard.access-code')}</p>
   <label>
     <!-- DO NOT change the order of bind:value and on:input. Their order determines the order of reactivity -->
-    <input placeholder="e.g. 5200 1234 5678 9012 3456"
+    <input bind:this={elemInputAC}
+           placeholder="e.g. 2408 1234 5678 9012 3456 / 0008 1234 5678 8765 4321"
            on:keydown={(e) => {
              e.key === "Enter" && link('AC')
              // Ensure key is numeric
@@ -247,13 +302,23 @@
            }}
            bind:value={inputAC}
            on:input={inputACChange}
-           class:error={inputAC && (!inputACRegex.test(inputAC) || errorAC)}>
+           class:error={inputAC && (!inputACRegex.test(inputAC) || errorAC)}
+           class:warning={inputAC && warningAC}>
     {#if inputAC.length > 0}
-      <button transition:slide={{axis: 'x'}} on:click={() => {link('AC');inputAC=''}}>{t('home.linkcard.link')}</button>
+      <button transition:slide={{axis: 'x'}} on:click={() => link('AC')}>{t('home.linkcard.link')}</button>
     {/if}
   </label>
+  <blockquote>{t('home.linkcard.kdx-notice')}</blockquote>
   {#if errorAC}
-    <p class="error" transition:slide>{errorAC}</p>
+    <p class="error" style={warningAC ? "margin-bottom: 0" : ""} transition:slide>{errorAC}</p>
+  {/if}
+  {#if warningAC}
+    <!-- Transition temporarily adds `overflow: hidden` which leads to BFC issue, breaking margin collapse -->
+    <div style="overflow: hidden" transition:slide>
+      {#each warningAC.trim().split("\n") as paragraph}
+        <p class="warning">{paragraph}</p>
+      {/each}
+    </div>
   {/if}
     </div>
     {/if}
@@ -266,7 +331,8 @@
     {t('home.linkcard.enter-sn2')}
   </p>
   <label>
-    <input placeholder="e.g. 01:2E:1A:2B:3C:4D:5E:6F"
+    <input bind:this={inputElemSN}
+           placeholder="e.g. 01:2E:1A:2B:3C:4D:5E:6F"
            on:keydown={(e) => {
              e.key === "Enter" && link('SN')
              // Ensure key is hex or colon
@@ -276,7 +342,7 @@
            on:input={inputSNChange}
            class:error={inputSN && (!inputSNRegex.test(inputSN) || errorSN)}>
     {#if inputSN.length > 0}
-      <button transition:slide={{axis: 'x'}} on:click={() => {link('SN'); inputSN = ''}}>{t('home.linkcard.link')}</button>
+      <button transition:slide={{axis: 'x'}} on:click={() => link('SN')}>{t('home.linkcard.link')}</button>
     {/if}
   </label>
   {#if errorSN}
@@ -317,7 +383,7 @@
 </div>
 
 <style lang="sass">
-  @import "../../vars"
+  @use "../../vars"
 
   .link-card
     input
@@ -334,37 +400,37 @@
       grid-template-columns: repeat(auto-fill, minmax(250px, 1fr))
       gap: 1rem
 
-      .existing.card
-        min-height: 90px
-        position: relative
-        overflow: hidden
+    .existing-cards .existing.card
+      min-height: 90px
+      position: relative
+      overflow: hidden
 
-        *
-          white-space: nowrap
+      *
+        white-space: nowrap
 
-        &.ghost
-          background: rgba($c-darker, 0.8)
+      &.ghost
+        background: rgba(vars.$c-darker, 0.8)
 
-        .register, .last
-          opacity: 0.7
+      .register, .last
+        opacity: 0.7
 
-        span:not(.type)
-          font-size: 0.8rem
+      span:not(.type)
+        font-size: 0.8rem
 
-        > div
-          flex: 1
+      > div
+        flex: 1
 
-        button
-          position: absolute
-          right: 10px
-          bottom: 10px
+      button
+        position: absolute
+        right: 10px
+        bottom: 10px
 
     .conflict-cards
       .card
-        transition: $transition
+        transition: vars.$transition
 
       .card:hover
-        background: $c-darker
+        background: vars.$c-darker
 
       span:not(.type)
         font-size: 0.8rem

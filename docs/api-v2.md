@@ -91,3 +91,13 @@ Located at: [icu.samnyan.aqua.net.UserRegistrar](icu/samnyan/aqua/net/UserRegist
 * token: String
 * file: MultipartFile
 * **Returns**: Success message
+
+# Migration
+
+### Chuni / Chusan
+
+GET /api/game/chuni/v2/profile > /api/v2/chu3/user-box
+GET /api/game/chuni/v2/data > /api/v2/chu3/user-box-all-items
+
+
+

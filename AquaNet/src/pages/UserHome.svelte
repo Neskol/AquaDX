@@ -12,31 +12,32 @@
   } from "../libs/generalTypes";
   import { DATA_HOST } from "../libs/config";
   import 'cal-heatmap/cal-heatmap.css';
-  import { Line } from 'svelte-chartjs';
   import moment from "moment";
   import 'chartjs-adapter-moment';
   import { CARD, DATA, GAME, USER } from "../libs/sdk";
   import { type GameName, getMult, roundFloor } from "../libs/scoring";
   import StatusOverlays from "../components/StatusOverlays.svelte";
   import Icon from "@iconify/svelte";
-  import { GAME_TITLE, t } from "../libs/i18n";
+  import { countryCodeToEmoji, GAME_TITLE, t } from "../libs/i18n";
   import RankDetails from "../components/RankDetails.svelte";
   import RatingComposition from "../components/RatingComposition.svelte";
   import useLocalStorage from "../libs/hooks/useLocalStorage.svelte";
+  import Line from "../components/chart/Line.svelte";
+  import ChuniUserboxDisplay from "../components/settings/userbox/ChuniUserboxDisplay.svelte";
 
   const TREND_DAYS = 60
 
   registerChart()
 
   export let username: string;
-  export let game: GameName = "mai2"
+  export let game: GameName | "auto" = "auto"
   let calElement: HTMLElement
   let error: string;
   let me: AquaNetUser
   title(`User ${username}`)
   const rounding = useLocalStorage("rounding", true);
 
-  const titleText = GAME_TITLE[game]
+  const titleText = game != "auto" ? GAME_TITLE[game] : "?"
 
   interface MusicAndPlay extends MusicMeta, GenericGamePlaylog {}
 
@@ -50,51 +51,78 @@
   let allMusics: AllMusic
   let showDetailRank = false
   let isLoading = false
-  USER.isLoggedIn() && USER.me().then(u => me = u)
+  let showMoreRecent = false
 
+  function init() {
+    USER.isLoggedIn() && USER.me().then(u => me = u)
 
-  CARD.userGames(username).then(games => {
-    if (!games[game]) {
-      // Find a valid game
-      const valid = Object.entries(games).filter(([g, valid]) => valid)
-      if (!valid || !valid[0]) return error = t("UserHome.NoValidGame")
-      window.location.href = `/u/${username}/${valid[0][0]}`
-    }
+    CARD.userGames(username).then(games => {
+      if (game == "auto") {
+        let targetGames = Object.entries(games)
+        .map(d => {
+          if (d[1])
+          d[1].lastLogin = d[1].lastLogin ? new Date(d[1].lastLogin) : new Date(0);
+          return d;
+        }).sort((a,b) => {
+          return b[1]?.lastLogin - a[1]?.lastLogin;
+        });
+        if (targetGames[0])
+          window.location.href = `/u/${username}/${targetGames[0][0]}`
+        return;
+      }
+      if (!games[game]) {
+        // Find a valid game
+        const valid = Object.entries(games).filter(([g, valid]) => valid)
+        if (!valid || !valid[0]) return error = t("UserHome.NoValidGame")
+        window.location.href = `/u/${username}/${valid[0][0]}`
+      }
 
-    Promise.all([
-      GAME.userSummary(username, game),
-      GAME.trend(username, game),
-      DATA.allMusic(game),
-    ]).then(([user, trend, music]) => {
-      console.log(user)
-      console.log(trend)
-      console.log(games)
+      Promise.all([
+        GAME.userSummary(username, game),
+        GAME.trend(username, game),
+        DATA.allMusic(game),
+      ]).then(([user, trend, music]) => {
+        console.log(user)
+        console.log(trend)
+        console.log(games)
 
-      // If game is wacca, divide all ratings by 10
-      if (game === 'wacca') {
-        user.rating /= 10
-        trend.forEach(it => it.rating /= 10)
-        user.recent.forEach(it => {
-          it.beforeRating /= 10
-          it.afterRating /= 10
+        // If game is wacca, divide all ratings by 10
+        if (game === 'wacca') {
+          user.rating /= 10
+          trend.forEach(it => it.rating /= 10)
+          user.recent.forEach(it => {
+            it.beforeRating /= 10
+            it.afterRating /= 10
+          })
+        }
+
+        // Set beforeRating in recent to the last play's afterRating
+        user.recent.forEach((it, i) => {
+          if (i < user.recent.length - 1) {
+            it.beforeRating = user.recent[i + 1].afterRating
+          }
         })
-      }
 
-      const minDate = moment().subtract(TREND_DAYS, 'days').format("YYYY-MM-DD")
-      d = {user,
-        trend: trend.filter(it => it.date >= minDate && it.plays != 0),
-        recent: user.recent.map(it => {return {...music[it.musicId], ...it}}),
-        validGames: Object.entries(GAME_TITLE).filter(g => games[g[0] as GameName])
-      }
-      allMusics = music
-      renderCal(calElement, trend.map(it => {return {date: it.date, value: it.plays}})).then(() => {
-        // Scroll to the rightmost
-        calElement.scrollLeft = calElement.scrollWidth - calElement.clientWidth
-      })
-    }).catch((e) => error = e.message);
-  }).catch((e) => { error = e.message; console.error(e) } );
+        const minDate = moment().subtract(TREND_DAYS, 'days').format("YYYY-MM-DD")
+        d = {user,
+          trend: trend.filter(it => it.date >= minDate && it.plays != 0),
+          recent: user.recent.map(it => {return {...music[it.musicId], ...it}}),
+          validGames: Object.entries(GAME_TITLE).filter(g => games[g[0] as GameName])
+        }
+        allMusics = music
+        renderCal(calElement, trend.map(it => {return {date: it.date, value: it.plays}})).then(() => {
+          // Scroll to the rightmost
+          calElement.scrollLeft = calElement.scrollWidth - calElement.clientWidth
+        })
+      }).catch((e) => error = e.message);
+    }).catch((e) => { error = e.message; console.error(e) } );
+  }
+
+  if (Object.keys(GAME_TITLE).includes(game) || game == "auto") init()
+  else error = t("UserHome.InvalidGame", {game})
 
   const setRival = (isAdd: boolean) => {
+    if (game == "auto") return;
     isLoading = true
     GAME.setRival(game, username, isAdd).then(() => {
       d!.user.rival = isAdd
@@ -107,24 +135,57 @@
     <div class="user-pfp">
       <img use:pfp={d.user.aquaUser} alt="" class="pfp" on:error={pfpNotFound}>
       <div class="name-box">
-        <h2>{d.user.name}</h2>
+        <div class="name-left">
+
+          {#if d.user.aquaUser}
+            {#if d.user.aquaUser.displayName}
+              <h2>{d.user.aquaUser?.displayName}</h2>
+            {:else}
+              <h2>{d.user.name}</h2>
+            {/if}
+            <div class="game-name">
+              {#if d.user.aquaUser.displayName}
+                {d.user.name}
+              {/if}
+              (@{d.user.aquaUser.username})
+            </div>
+            <div class="country">{countryCodeToEmoji(d.user.aquaUser?.country)}</div>
+          {:else}
+            <h2>{d.user.name}</h2>
+          {/if}
+        </div>
         {#if typeof d.user.rival === 'boolean' && game === 'mai2'}
-          <a class="clickable" on:click={()=>setRival(!d.user.rival)}>
+          <span class="clickable" on:click={() => setRival(!d?.user.rival)} role="button" tabindex="0"
+             on:keydown={e => e.key === "Enter" && setRival(!d?.user.rival)}>
             {d.user.rival ? t("UserHome.RemoveRival") : t("UserHome.AddRival")}
-          </a>
-        {/if}
-        {#if me && me.username === username}
-          <a class="setting-icon clickable" use:tooltip={t("UserHome.Settings")} href="/settings">
-            <Icon icon="eos-icons:rotating-gear"/>
-          </a>
+          </span>
         {/if}
       </div>
       <nav>
         {#each d.validGames as [g, name]}
           <a href={`/u/${username}/${g}`} class:active={game === g}>{name}</a>
         {/each}
+
+        {#if me && me.username === username}
+          <a class="setting-icon clickable" use:tooltip={t("UserHome.Settings")} href="/settings">
+            <Icon icon="eos-icons:rotating-gear"/>
+          </a>
+        {/if}
       </nav>
     </div>
+
+    {#if d.user.aquaUser?.profileBio}
+      <div class="activity-info">
+        <div class="info-bottom profile-bio-container">
+          <div class="profile-bio">
+            <span>{t("settings.profile.bio")}</span>
+            <span class="profile-bio-text">{d.user.aquaUser?.profileBio}</span>
+          </div>
+        </div>
+      </div>
+    {/if}
+
+    <ChuniUserboxDisplay {game} {username} bind:error={error} />
 
     <div>
       <h2>{titleText} {t('UserHome.Statistics')}</h2>
@@ -134,7 +195,7 @@
             <div class="rating">
               <span>{game === 'mai2' ? t("UserHome.DXRating"): t("UserHome.Rating")}</span>
               <span>{
-                game === 'chu3' ?
+                game === 'chu3' || game === 'ongeki' ?
                   (d.user.rating / 100).toFixed(2) :
                   d.user.rating.toLocaleString()
               }</span>
@@ -142,7 +203,7 @@
 
             <div class="rank">
               <span>{t('UserHome.ServerRank')}</span>
-              <span>#{+d.user.serverRank.toLocaleString() + 1}</span>
+              <span>#{(d.user.serverRank + 1).toLocaleString()}</span>
             </div>
           </div>
 
@@ -219,7 +280,7 @@
     <div>
       <h2>{t('UserHome.PlayActivity')}</h2>
       <div class="activity-info">
-        <div class="hide-scrollbar" id="cal-heatmap" bind:this={calElement} />
+        <div class="hide-scrollbar" id="cal-heatmap" bind:this={calElement}></div>
 
         <div class="info-bottom">
           <div class="plays">
@@ -250,42 +311,61 @@
       </div>
     </div>
 
-    <RatingComposition title="B30" comp={d.user.ratingComposition.best30} {allMusics} {game}/>
-    <RatingComposition title="B35" comp={d.user.ratingComposition.best35} {allMusics} {game}/>
-    <RatingComposition title="B15" comp={d.user.ratingComposition.best15} {allMusics} {game}/>
-    <RatingComposition title="Recent 10" comp={d.user.ratingComposition.recent10} {allMusics} {game}/>
+    <!-- I don't like doing this but it may be preferable to gaslighting the types -->
+
+    <RatingComposition title="B30" comp={d.user.ratingComposition.best30} {allMusics} game={game != "auto" ? game : "mai2"}/>
+    <RatingComposition title="B35" comp={d.user.ratingComposition.best35} {allMusics} game={game != "auto" ? game : "mai2"}/>
+    <RatingComposition title="B15" comp={d.user.ratingComposition.best15} {allMusics} game={game != "auto" ? game : "mai2"}/>
+    <!-- <RatingComposition title="Hot 10" comp={d.user.ratingComposition.hot10} {allMusics} {game}/> -->
+    <!-- <RatingComposition title="N10" comp={d.user.ratingComposition.next10} {allMusics} {game}/> -->
+     <!-- Chuni -->
+    {#if d.user.ratingComposition.new}
+      <RatingComposition title="New 20" comp={d.user.ratingComposition.new} {allMusics} game="chu3"/>
+    {:else}
+      <RatingComposition title="Recent 10" comp={d.user.ratingComposition.recent10} {allMusics} game={game != "auto" ? game : "mai2"} top={10}/>
+    {/if}
+
 
     <div class="recent">
       <h2>{t('UserHome.RecentScores')}</h2>
       <div class="scores">
-        {#each d.recent as r, i}
+        {#each (showMoreRecent ? d.recent : d.recent.slice(0, 15)) as r, i}
           <div class:alt={i % 2 === 0}>
             <img src={`${DATA_HOST}/d/${game}/music/00${r.musicId.toString().padStart(6, '0').substring(2)}.png`} alt="" on:error={coverNotFound} />
             <div class="info">
               <div>{r.name ?? t("UserHome.UnknownSong")}</div>
               <div>
-                <span class={`lv level-${r.level === 10 ? 3 : r.level}`}>
-                  { r.notes?.[r.level === 10 ? 0 : r.level]?.lv?.toFixed(1) ?? '-' }
+                {#if r.isAllPerfect || r.isAllJustice}
+                  <img src="/assets/imgs/All Perfect.png" alt="All Perfect" />
+                {:else if r.isFullCombo}
+                  <img src="/assets/imgs/Full Combo.png" alt="Full Combo" />
+                {/if}
+                <span class={`lv level-${r.level === 10 ? 5 : r.level}`}>
+                  <span>
+                    {r.notes?.[r.level === 10 ? 0 : r.level]?.lv?.toFixed(1) ?? r.worldsEndTag ?? '-'}
+                  </span>
                 </span>
-                <span class={`rank-${getMult(r.achievement, game)[2].toString()[0]}`}>
-                  <span class="rank-text">{("" + getMult(r.achievement, game)[2]).replace("p", "+")}</span>
+                <span class={`rank-${getMult(r.achievement, game != "auto" ? game : "mai2")[2].toString()[0]}`}>
+                  <span class="rank-text">{("" + getMult(r.achievement, game != "auto" ? game : "mai2")[2]).replace("p", "+")}</span>
                   <span class="rank-num" use:tooltip={(r.achievement / 10000).toFixed(4)}>
                     {
                       rounding.value ?
-                        roundFloor(r.achievement, game, 1) :
+                        roundFloor(r.achievement, game != "auto" ? game : "mai2", 1) :
                         (r.achievement / 10000).toFixed(4)
                     }%
                   </span>
                 </span>
-                {#if game === 'mai2' || game === 'wacca'}
-                  <span class:increased={r.afterRating - r.beforeRating > 0} class="dx-change">
-                    {r.afterRating === r.beforeRating ? '-' : (r.afterRating - r.beforeRating).toFixed(0)}
-                  </span>
-                {/if}
+                <span class:increased={r.afterRating - r.beforeRating > 0} class="dx-change">
+                  {r.afterRating === r.beforeRating ? '-' : (r.afterRating - r.beforeRating).toFixed(0)}
+                </span>
               </div>
             </div>
           </div>
         {/each}
+
+        {#if !showMoreRecent}
+          <button class="clickable" on:click={() => showMoreRecent = true}>{t('UserHome.ShowMoreRecent')}</button>
+        {/if}
       </div>
     </div>
   {/if}
@@ -294,13 +374,13 @@
 </main>
 
 <style lang="sass">
-@import "../vars"
+@use "../vars"
 
 #user-home
   .user-pfp
     display: flex
     align-items: flex-end
-    gap: $gap
+    gap: vars.$gap
     margin-top: -72px
     position: relative
 
@@ -319,10 +399,13 @@
 
     .setting-icon
       font-size: 1.5rem
-      color: $c-main
+      color: vars.$c-main
       cursor: pointer
       display: flex
       align-items: center
+
+      position: relative
+      z-index: 20
 
     .name-box
       flex: 1
@@ -331,13 +414,27 @@
       justify-content: space-between
       gap: 10px
 
+      .name-left
+        display: flex
+        gap: 1em
+        position: relative
+
+        .game-name
+          position: absolute
+          left: 0.5em
+          bottom: 0
+          transform: translate(0, 75%)
+          opacity: 50%
+          white-space: nowrap
+          max-width: 50%
+
   .pfp
     width: 100px
     height: 100px
-    border-radius: $border-radius
+    border-radius: vars.$border-radius
     object-fit: cover
 
-  @media (max-width: $w-mobile)
+  @media (max-width: vars.$w-mobile)
     .user-pfp
       margin-top: -68px
       h2
@@ -349,7 +446,7 @@
 
   .info-bottom, .info-top, .other-info
     display: flex
-    gap: $gap
+    gap: vars.$gap
 
     > div
       display: flex
@@ -361,10 +458,20 @@
 
         // character spacing
         letter-spacing: 0.1em
-        color: $c-main
+        color: vars.$c-main
 
   .info-bottom
     width: max-content
+
+    &.profile-bio-container,
+    &.profile-bio-container div
+      width: 100%
+
+    .profile-bio-text
+      white-space: pre
+      max-height: 10em
+      overflow-y: auto
+      flex: 1
 
   .info-top > div > span:last-child
     font-size: 1.5rem
@@ -376,7 +483,7 @@
 
   .scoring-info
     display: flex
-    gap: $gap
+    gap: vars.$gap
     max-height: 250px
 
     .chart
@@ -408,7 +515,7 @@
           opacity: 0.5
           user-select: none
 
-    @media (max-width: $w-mobile)
+    @media (max-width: vars.$w-mobile)
       flex-direction: column
       max-height: unset
 
@@ -429,12 +536,12 @@
   .activity-info
     display: flex
     flex-direction: column
-    gap: $gap
+    gap: vars.$gap
 
     #cal-heatmap
       overflow-x: auto
 
-    @media (max-width: $w-mobile)
+    @media (max-width: vars.$w-mobile)
       #cal-heatmap
         width: 100%
 
@@ -453,17 +560,17 @@
       display: flex
       flex-direction: column
       flex-wrap: wrap
-      gap: $gap
+      gap: vars.$gap
 
       > div.alt
         background-color: rgba(white, 0.03)
-        border-radius: $border-radius
+        border-radius: vars.$border-radius
 
       // Image and song info
       > div
         display: flex
         align-items: center
-        gap: $gap
+        gap: vars.$gap
         padding-right: 16px
         max-width: 100%
         box-sizing: border-box
@@ -471,7 +578,7 @@
         img
           width: 50px
           height: 50px
-          border-radius: $border-radius
+          border-radius: vars.$border-radius
           object-fit: cover
 
         // Song info and score
@@ -479,6 +586,7 @@
           flex: 1
           display: flex
           justify-content: space-between
+          align-items: center
           overflow: hidden
 
           // Limit song name to one line
@@ -492,8 +600,15 @@
           // Make song score and rank not wrap
           > div:last-child
             white-space: nowrap
+            display: flex
+            align-items: center
+            gap: 10px
 
-          @media (max-width: $w-mobile)
+            img
+              height: 1.5em
+              width: 1.5em
+
+          @media (max-width: vars.$w-mobile)
             flex-direction: column
             gap: 0
 
@@ -511,7 +626,7 @@
 
         .rank-S
           // Gold green gradient on text
-          background: $grad-special
+          background: vars.$grad-special
           -webkit-background-clip: text
           color: transparent
 
@@ -526,8 +641,16 @@
           text-align: center
           background: rgba(var(--lv-color), 0.6)
           padding: 0 6px
-          border-radius: $border-radius
-          margin-right: 10px
+          border-radius: vars.$border-radius
+
+        .lv.level-5 > span
+          color: transparent
+          background: var(--lv-text-clip)
+          background-clip: text
+          -webkit-background-clip: text
+          font-weight: bold
+          font-size: 1em
+          font-family: 'Arial Black', sans-serif
 
         span
           display: inline-block
@@ -535,7 +658,7 @@
 
         // Vertical table-like alignment
         span.rank-text
-          min-width: 40px
+          min-width: 38px
         span.rank-num
           min-width: 60px
         span.dx-change
@@ -544,5 +667,7 @@
       span.increased
         &:before
           content: "+"
-        color: $c-good
+        color: vars.$c-good
+
+
 </style>

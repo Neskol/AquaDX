@@ -52,6 +52,7 @@ class AquaNetUser(
     var profileLocation: String? = "",
     var profileBio: String? = "",
     var profilePicture: String? = "",
+    var optOutOfLeaderboard: Boolean = false,
 
     // Email confirmation
     var emailConfirmed: Boolean = false,
@@ -115,7 +116,8 @@ class AquaUserServices(
     val hasher: PasswordEncoder,
     val keyChipRepo: KeyChipRepo,
     val allNetProps: AllNetProps,
-    val jwt: JWT
+    val jwt: JWT,
+    val em: EntityManager
 ) {
     companion object {
         val SETTING_FIELDS = AquaUserServices::class.functions
@@ -130,11 +132,12 @@ class AquaUserServices(
     suspend fun <T> byName(username: Str, callback: suspend (AquaNetUser) -> T) =
         async { userRepo.findByUsernameIgnoreCase(username) }?.let { callback(it) } ?: (404 - "User not found")
 
-    suspend fun <T> cardByName(username: Str, callback: suspend (Card) -> T) =
+    suspend fun cardByName(username: Str) =
         if (username.startsWith("user")) username.substring(4).toLongOrNull()
-            ?.let { cardRepo.findById(it).getOrNull() }
-            ?.let { callback(it) } ?: (404 - "Card not found")
-        else byName(username) { callback(it.ghostCard) }
+            ?.let { cardRepo.findById(it).getOrNull() } ?: (404 - "Card not found")
+        else byName(username) { it.ghostCard }
+
+    suspend fun <T> cardByName(username: Str, callback: suspend (Card) -> T) = callback(cardByName(username))
 
     fun validKeychip(keychipId: Str): Bool {
         if (!allNetProps.checkKeychip) return true
@@ -193,4 +196,6 @@ class AquaUserServices(
         // Check if profile bio is valid
         if (length > 255) 400 - "Profile bio too long (max 255 letters)"
     }
+
+    fun checkOptOutOfLeaderboard(optOutOfLeaderboard: Str) = optOutOfLeaderboard.toBoolean()
 }

@@ -21,7 +21,10 @@ import java.security.SecureRandom
 class KeychipSession(
     @ManyToOne
     @JoinColumn(name = "au_id")
-    var user: AquaNetUser = AquaNetUser(),
+    var user: AquaNetUser? = null,
+
+    @Column(length = 4)
+    val gameId: String,
 
     @Id
     @Column(length = 32)
@@ -51,7 +54,7 @@ interface KeychipSessionRepo : JpaRepository<KeychipSession, String> {
 
 @Service
 class KeychipSessionService(
-    val keychipSessionRepo: KeychipSessionRepo,
+    val repo: KeychipSessionRepo,
     val props: AllNetProps
 ) {
     val logger = LoggerFactory.getLogger(KeychipSessionService::class.java)
@@ -63,22 +66,26 @@ class KeychipSessionService(
     suspend fun cleanup() = async {
         logger.info("!!! Keychip session cleanup !!!")
         val expire = System.currentTimeMillis() - props.keychipSesExpire
-        keychipSessionRepo.deleteAllByLastUseBefore(expire)
+        repo.deleteAllByLastUseBefore(expire)
     }
 
     /**
      * Create a new session.
      */
-    fun new(user: AquaNetUser): KeychipSession {
-        val session = KeychipSession(user = user)
-        return keychipSessionRepo.save(session)
+    fun new(user: AquaNetUser?, gameId: String): KeychipSession {
+        val session = KeychipSession(user = user, gameId = gameId)
+        return repo.save(session)
     }
 
     /**
      * Find a session. If found, renew the last use time.
      */
-    fun find(token: String) = keychipSessionRepo.findByToken(token)?.apply {
+    fun find(token: String) = repo.findByToken(token)?.apply {
         lastUse = System.currentTimeMillis()
-        keychipSessionRepo.save(this)
+        try {
+            repo.save(this)
+        } catch (_: Exception) {
+            logger.error("Failed to update last use time for session $token")
+        }
     }
 }

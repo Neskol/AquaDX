@@ -16,29 +16,26 @@
   } | null;
   let confirmAction: (override: boolean) => void;
 
-  const startImport = async () => {
-    const [fileHandle] = await window.showOpenFilePicker({
-      id: 'aquadx_import',
-      startIn: 'downloads',
-      types: [
-        {
-          description: "Aqua Player Data",
-          accept: {
-            "application/json": [".json"],
-          },
-        },
-      ],
-    });
+  let fileInput: HTMLInputElement;
+  const startImport = async (e: Event & { currentTarget: EventTarget & HTMLInputElement; }) => {
+    const file = e.currentTarget.files?.[0]
 
-    if (!fileHandle) return;
+    if (!file) return;
     load = true;
 
     try {
-      const file = await fileHandle.getFile();
       const data = JSON.parse(await file.text()) as any;
-      const game = getGameByCode(data.gameId);
-
       const me = await USER.me();
+
+      const maybeUserMusicList = data?.userMusicList || data;
+      if (Array.isArray(maybeUserMusicList) && maybeUserMusicList.every(it => Array.isArray(it?.userMusicDetailList))) {
+        // Is music list array
+        await GAME.importMusicDetail("mai2", maybeUserMusicList.flatMap(it => it.userMusicDetailList));
+        location.href = `/u/${me.username}/mai2`;
+        return;
+      }
+
+      const game = getGameByCode(data.gameId);
       const userGames = await CARD.userGames(me.username);
 
       const existed = userGames[game];
@@ -59,6 +56,7 @@
       location.href = `/u/${me.username}/${game}`;
     } catch (e: any) {
       error = e.message;
+      console.error(e);
     } finally {
       conflict = null;
       load = false;
@@ -66,7 +64,7 @@
   }
 
   const getGameByCode = (code: string) => {
-    switch (code.toUpperCase()) {
+    switch (code?.toUpperCase()) {
       case 'SDEZ':
         return 'mai2';
       case 'SDHD':
@@ -77,47 +75,49 @@
   }
 </script>
 
-<ActionCard color="209, 124, 102" icon="bxs:file-import" on:click={startImport}>
-  <h3>{t('home.import')}</h3>
-  <span>{t('home.import-description')}</span>
+<ActionCard color="209, 124, 102" icon="bxs:file-import" on:click={() => fileInput.click()}>
+    <h3>{t('home.import')}</h3>
+    <span>{t('home.import-description')}</span>
+    <input type="file" accept=".json" bind:this={fileInput} style="display: none"
+      on:change={startImport}/>
 </ActionCard>
 
 <StatusOverlays {error} loading={load}/>
 
 {#if conflict}
-  <div class="overlay" transition:fade>
-    <div>
-      <h2>{t('home.import.data-conflict')}</h2>
-      <p></p>
-      <div class="conflict-cards">
-        <div class="old card">
-          <span class="type">{t('home.linkcard.account-card')}</span>
-          <span>{t('home.linkcard.name')}: {conflict.oldName}</span>
-          <span>{t('home.linkcard.rating')}: {conflict.oldRating}</span>
-          <div class="trash">
-            <Icon icon="ph:trash-duotone"/>
-          </div>
+    <div class="overlay" transition:fade>
+        <div>
+            <h2>{t('home.import.data-conflict')}</h2>
+            <p></p>
+            <div class="conflict-cards">
+                <div class="old card">
+                    <span class="type">{t('home.linkcard.account-card')}</span>
+                    <span>{t('home.linkcard.name')}: {conflict.oldName}</span>
+                    <span>{t('home.linkcard.rating')}: {conflict.oldRating}</span>
+                    <div class="trash">
+                        <Icon icon="ph:trash-duotone"/>
+                    </div>
+                </div>
+                <div class="icon">
+                    <Icon icon="icon-park-outline:down"/>
+                </div>
+                <div class="new card">
+                    <span class="type">{t('home.import.new-data')}</span>
+                    <span>{t('home.linkcard.name')}: {conflict.newName}</span>
+                    <span>{t('home.linkcard.rating')}: {conflict.newRating}</span>
+                </div>
+            </div>
+            <p></p>
+            <div class="buttons">
+                <button on:click={() => confirmAction(false)}>{t('action.cancel')}</button>
+                <button class="error" on:click={() => confirmAction(true)}>{t('action.confirm')}</button>
+            </div>
         </div>
-        <div class="icon">
-          <Icon icon="icon-park-outline:down"/>
-        </div>
-        <div class="new card">
-          <span class="type">{t('home.import.new-data')}</span>
-          <span>{t('home.linkcard.name')}: {conflict.newName}</span>
-          <span>{t('home.linkcard.rating')}: {conflict.newRating}</span>
-        </div>
-      </div>
-      <p></p>
-      <div class="buttons">
-        <button on:click={() => confirmAction(false)}>{t('action.cancel')}</button>
-        <button class="error" on:click={() => confirmAction(true)}>{t('action.confirm')}</button>
-      </div>
     </div>
-  </div>
 {/if}
 
 <style lang="sass">
-  @import "../../vars"
+  @use "../../vars"
   h3
     font-size: 1.3rem
     margin: 0
@@ -133,7 +133,7 @@
 
     .old
       background: #ff6b6b20
-      border: 1px solid $c-error
+      border: 1px solid vars.$c-error
       color: #ffffff99
       position: relative
 
@@ -142,13 +142,13 @@
         position: absolute
         bottom: 0.5rem
         right: 0.5rem
-        color: $c-error
+        color: vars.$c-error
         opacity: 0.6
         font-size: 2rem
 
     .new
       background: #646cff20
-      border: 1px solid $c-darker
+      border: 1px solid vars.$c-darker
 
   .buttons
     display: grid

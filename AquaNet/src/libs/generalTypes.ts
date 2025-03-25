@@ -1,3 +1,5 @@
+export type Dict = Record<string, any>
+
 export interface TrendEntry {
   date: string
   rating: number
@@ -26,6 +28,8 @@ export interface AquaNetUser {
   ghostCard: Card
   cards: Card[]
   computedName: string,
+  password: string,
+  optOutOfLeaderboard: boolean,
 }
 
 export interface CardSummaryGame {
@@ -46,7 +50,7 @@ export interface CardSummary {
 export interface ConfirmProps {
   title: string
   message: string
-  confirm: () => void
+  confirm?: () => void
   cancel?: () => void
   dangerous?: boolean
 }
@@ -60,6 +64,9 @@ export interface GenericGamePlaylog {
   totalCombo: number
   afterRating: number
   beforeRating: number
+  isFullCombo?: boolean
+  isAllPerfect?: boolean
+  isAllJustice?: boolean
 }
 
 export interface GenericRanking {
@@ -112,7 +119,9 @@ export interface MusicMeta {
     designer: string
     lv_id: number
     notes: number
-  }[]
+  }[],
+  worldsEndTag?: string
+  worldsEndStars?: number
 }
 
 export type AllMusic = { [key: string]: MusicMeta }
@@ -120,37 +129,23 @@ export type AllMusic = { [key: string]: MusicMeta }
 export interface GameOption {
   key: string
   value: any
-  type: 'Boolean'
+  type: 'Boolean' | 'String'
   game: string
+
+  changed?: boolean
 }
 
+export interface UserItem { itemKind: number, itemId: number, stock: number }
 export interface UserBox {
-  userName:string,
-  level:number,
-  exp:string,
-  point:number,
-  totalPoint:number,
-  playerRating:number,
-  highestRating:number,
-  nameplateId:number,
-  frameId:number,
-  characterId:number,
-  trophyId:number,
-  totalMapNum:number,
-  totalHiScore: number,
-  totalBasicHighScore:number,
-  totalAdvancedHighScore:number,
-  totalExpertHighScore:number,
-  totalMasterHighScore:number,
-  totalUltimaHighScore:number,
-  friendCount:number,
-  firstPlayDate:Date,
-  lastPlayDate:Date,
-  courseClass:number,
-  overPowerPoint:number,
-  overPowerRate:number,
-  mapIconId:number,
-  voiceId:number,
+  userName: string,
+  nameplateId: number,
+  frameId: number,
+  characterId: number,
+  trophyId: number,
+  trophyIdSub1: number,
+  trophyIdSub2: number,
+  mapIconId: number,
+  voiceId: number,
   avatarWear: number,
   avatarHead: number,
   avatarFace: number,
@@ -158,31 +153,16 @@ export interface UserBox {
   avatarItem: number,
   avatarFront: number,
   avatarBack: number,
+
+  level: number
+  playerRating: number
 }
 
-// Assign a number to each kind of user box item with an enum
-export enum UserBoxItemKind {
-  nameplate = 1,
-  frame = 2,
-  trophy = 3,
-  mapicon = 8,
-  sysvoice = 9,
-  avatar = 11,
+export interface ChusanMatchingOption {
+  name: string
+  ui: string
+  guide: string
+  matching: string
+  reflector: string
+  coop: string[]
 }
-
-// Define type only with the keys
-export type UserBoxItemKindStr = keyof typeof UserBoxItemKind;
-
-type ChangePlateReq = {kind:'plate', nameplateId:number}
-type ChangeFrameReq = {kind:'frame', frameId:number}
-type ChangeTrophyReq = {kind:'trophy',trophyId:number}
-type ChangeMapIconReq = {kind:'mapicon',mapiconid:number}
-type ChangeVoiceReq = {kind:'sysvoice',voiceId:number}
-type ChangeAvatarReq = {
-  kind:'avatar',
-  accId:number,
-  category:number
-}
-
-export type ChangeUserBoxReq = {aimeId:string} & (ChangePlateReq | ChangeFrameReq | ChangeTrophyReq | ChangeMapIconReq | ChangeVoiceReq | ChangeAvatarReq);
-

@@ -30,13 +30,13 @@
 </div>
 
 <style lang="sass">
-  @import '../vars'
+  @use '../vars'
 
   .action-card
     overflow: hidden
     padding: 1rem
-    border-radius: $border-radius
-    box-shadow: 0 5px 5px 1px $c-shadow
+    border-radius: vars.$border-radius
+    box-shadow: 0 5px 5px 1px vars.$c-shadow
     transition: all 0.2s ease
     cursor: pointer
     position: relative
@@ -45,14 +45,14 @@
     filter: drop-shadow(0 0 12px rgba(var(--card-color), 0))
 
     &:hover
-      box-shadow: 0 0 0.5rem 0.2rem $c-shadow
+      box-shadow: 0 0 0.5rem 0.2rem vars.$c-shadow
       transform: translateY(-3px)
 
       // Drop shadow glow
       filter: drop-shadow(0 0 12px rgba(var(--card-color), 0.5))
       outline-color: rgba(var(--card-color), 0.5)
 
-    span
+    :global(span)
       font-size: 1.2rem
       display: block
       margin-bottom: 0.5rem
@@ -67,7 +67,7 @@
       mask-image: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.5) 70%, white 100%)
       opacity: 0.8
 
-      @media (max-width: $w-mobile)
+      @media (max-width: vars.$w-mobile)
         opacity: 0.6
 
       :global(> svg)

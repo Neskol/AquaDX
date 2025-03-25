@@ -13,7 +13,7 @@
 <div class="rank-detail-container fw-block" transition:slide>
   <div>
     <h2>{t("UserHome.RankDetail.Title")}</h2>
-    <table>
+    <table><tbody>
       <!-- rankDetails: { Level : { Rank : Count } } -->
       <!-- Rows are levels, columns are ranks -->
 
@@ -30,12 +30,12 @@
           {#each Object.values(rankMap) as count}<td>{count}</td>{/each}
         </tr>
       {/each}
-    </table>
+    </tbody></table>
   </div>
 </div>
 
 <style lang="sass">
-  @import "../vars"
+  @use "../vars"
 
   .rank-detail-container
     > div
@@ -48,11 +48,11 @@
       table-layout: fixed
 
       th:not(:first-child)
-        background: $grad-special
+        background: vars.$grad-special
         -webkit-background-clip: text
         -webkit-text-fill-color: transparent
         background-clip: text
-        color: $c-main
+        color: vars.$c-main
         padding: 0.5em
 
       th, td
@@ -60,5 +60,5 @@
         text-align: center
 
         &:first-child
-          color: $c-main
+          color: vars.$c-main
 </style>

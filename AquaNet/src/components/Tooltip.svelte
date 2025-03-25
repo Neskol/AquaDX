@@ -56,14 +56,14 @@
 {/if}
 
 <style lang="sass">
-  @import "../vars"
+  @use "../vars"
 
   .tooltip
     position: absolute
-    z-index: 1000
+    z-index: 900
     background: white
     padding: 10px 16px
-    border-radius: $border-radius
+    border-radius: vars.$border-radius
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1)
     pointer-events: none
     white-space: nowrap

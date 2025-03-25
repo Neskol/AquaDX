@@ -21,6 +21,10 @@
   let error = ""
   let verifyMsg = ""
 
+  if (USER.isLoggedIn()) {
+    window.location.href = "/home"
+  }
+
   if (params.get('confirm-email')) {
     state = 'verify'
     verifyMsg = t("welcome.verifying")
@@ -47,7 +51,7 @@
       return submitting = false
     }
 
-    if (turnstile === "") {
+    if (TURNSTILE_SITE_KEY && turnstile === "") {
       // Sleep for 100ms to allow Turnstile to finish
       error = t("welcome.waiting-turnstile")
       return setTimeout(submit, 100)
@@ -133,11 +137,13 @@
             {isSignup ? t('welcome.btn-signup') : t('welcome.btn-login')}
           {/if}
         </button>
+        {#if TURNSTILE_SITE_KEY}
         <Turnstile siteKey={TURNSTILE_SITE_KEY} bind:reset={turnstileReset}
                    on:turnstile-callback={e => console.log(turnstile = e.detail.token)}
                    on:turnstile-error={_ => console.log(error = t("welcome.turnstile-error"))}
                    on:turnstile-expired={_ => window.location.reload()}
                    on:turnstile-timeout={_ => console.log(error = t('welcome.turnstile-timeout'))} />
+        {/if}
       </div>
     {:else if state === "verify"}
       <div class="login-form" transition:slide>
@@ -157,7 +163,7 @@
 </main>
 
 <style lang="sass">
-  @import "../vars"
+  @use "../vars"
 
   .login-form
     display: flex
@@ -171,7 +177,7 @@
       align-items: center
 
   #home
-    color: $c-main
+    color: vars.$c-main
     position: relative
     width: 100%
     height: 100%
@@ -185,7 +191,7 @@
     flex-direction: column
     justify-content: center
 
-    margin-top: -$nav-height
+    margin-top: -(vars.$nav-height)
 
     // Content container
     > div
@@ -196,10 +202,10 @@
 
       // Switching state container
       > div
-        transition: $transition
+        transition: vars.$transition
 
     #title
-      font-family: Quicksand, $font
+      font-family: Quicksand, vars.$font
       user-select: none
 
       // Gap between text characters

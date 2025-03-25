@@ -1,3 +1,4 @@
+db/
 web/
 bin/
 
@@ -80,3 +81,5 @@ gradle-app.setting
 src/main/resources/meta/*/*.json
 *.log.*.gz
 *.salive
+test-diff
+htmlReport

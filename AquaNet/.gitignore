@@ -31,3 +31,8 @@ dist-ssr
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+public/chu3
+
+# local env file
+*.local

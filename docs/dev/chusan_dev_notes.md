@@ -1,19 +1,21 @@
 # Chusan dev notes
 
 ## Item types
-| ItemKind |       Name        | Single / Multiple |             Notes             |
-|----------|-------------------|-------------------|-------------------------------|
-|    1     |  Nameplate        |      Single       |               -               |
-|    2     |  Frame            |      Single       |               -               |
-|    3     |  Trophy           |      Single       |               -               |
-|    4     |  Skill            |      Multiple     |     Stock is level of skill   |
-|    5     |  Ticket           |      Multiple     |               -               |
-|    6     |  Present          |      Multiple?    |               -               |
-|    7     |  Music (Unlock)   |      Single       |               -               |
-|    8     |  Map Icon         |      Single       |               -               |
-|    9     |  System Voice     |      Single       |               -               |
-|    10    |  Symbol Chat      |      Single       |               -               |
-|    11    |  Avatar Accessory |      Single       |Part can determined by category|
+| ItemKind | Name             | Single / Multiple | Notes                           |
+|----------|------------------|-------------------|---------------------------------|
+| 1        | Nameplate        | Single            | -                               |
+| 2        | Frame            | Single            | -                               |
+| 3        | Trophy           | Single            | -                               |
+| 4        | Skill            | Multiple          | Stock is level of skill         |
+| 5        | Ticket           | Multiple          | -                               |
+| 6        | Present          | Multiple?         | -                               |
+| 7        | Music (Unlock)   | Single            | -                               |
+| 8        | Map Icon         | Single            | -                               |
+| 9        | System Voice     | Single            | -                               |
+| 10       | Symbol Chat      | Single            | -                               |
+| 11       | Avatar Accessory | Single            | Part can determined by category |
+
+Note: Chuni penguin statues are tickets (ok that sounds dumb)
 
 ## Avatar accessory category
 |  Category ID  | Part name |

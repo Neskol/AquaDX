@@ -3,19 +3,17 @@ package icu.samnyan.aqua.sega.maimai2.handler
 import com.fasterxml.jackson.core.JsonProcessingException
 import ext.invoke
 import ext.mapApply
-import ext.minus
-import icu.samnyan.aqua.net.games.SEGA_USERNAME_CAHRS
+import ext.unique
 import icu.samnyan.aqua.sega.general.BaseHandler
 import icu.samnyan.aqua.sega.general.service.CardService
 import icu.samnyan.aqua.sega.maimai2.handler.UploadUserPlaylogHandler.Companion.playBacklog
 import icu.samnyan.aqua.sega.maimai2.model.*
-import icu.samnyan.aqua.sega.maimai2.model.request.UpsertUserAll
+import icu.samnyan.aqua.sega.maimai2.model.request.Mai2UpsertUserAll
 import icu.samnyan.aqua.sega.maimai2.model.userdata.*
 import icu.samnyan.aqua.sega.util.jackson.BasicMapper
 import lombok.AllArgsConstructor
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import kotlin.math.log
 
 /**
  * @author samnyan (privateamusement@protonmail.com)
@@ -32,15 +30,12 @@ class UpsertUserAllHandler(
 
     @Throws(JsonProcessingException::class)
     override fun handle(request: Map<String, Any>): Any? {
-        val upsertUserAll = mapper.convert(request, UpsertUserAll::class.java)
+        val upsertUserAll = mapper.convert(request, Mai2UpsertUserAll::class.java)
         val userId = upsertUserAll.userId
         val req = upsertUserAll.upsertUserAll
 
         // If user is guest, just return OK response.
         if ((userId and 281474976710657L) == 281474976710657L) return SUCCESS
-
-        // UserData
-        if (req.userData == null) 400 - "Invalid Request"
 
         val userData = repos.userData.findByCardExtId(userId)()
         val u = repos.userData.saveAndFlush(req.userData[0].apply {
@@ -52,8 +47,15 @@ class UpsertUserAllHandler(
             if (!userName.isValidUsername())
             {
                 // Maybe it's encoded
-                userName = String(userName.toByteArray(Charsets.ISO_8859_1), Charsets.UTF_8)
-                if (!userName.isValidUsername()) 400 - "Invalid username"
+                val decodeUserName = String(userName.toByteArray(Charsets.ISO_8859_1), Charsets.UTF_8)
+                if (userName.isValidUsername()) {
+                    userName = decodeUserName
+                } else {
+                    logger.warn("Invalid username: $userName")
+                    // Maybe it's from some self-made import tools or modified game
+                    // So apply it if user not in database
+                    userName = userData?.userName ?: userName
+                }
             }
         })
 
@@ -63,12 +65,13 @@ class UpsertUserAllHandler(
         }
 
         // Set users
-        req.run { listOf(userExtend, userOption, userCharacterList, userMapList, userLoginBonusList, userItemList,
-            userMusicDetailList, userCourseList, userFriendSeasonRankingList, userFavoriteList) }
-            .flatten().forEach {
-                logger.info(it.toString())
-                it.user = u
-            }
+        req.run {
+            listOfNotNull(
+                userExtend, userOption, userCharacterList, userMapList, userLoginBonusList, userItemList,
+                userMusicDetailList, userCourseList, userFriendSeasonRankingList, userFavoriteList,
+                userKaleidxScopeList, userIntimateList
+            )
+        }.flatten().forEach { it.user = u }
 
         req.userExtend?.getOrNull(0)?.let {
             repos.userExtend.save(it.apply { id = repos.userExtend.findSingleByUser(u)()?.id ?: 0 })
@@ -78,17 +81,19 @@ class UpsertUserAllHandler(
             repos.userOption.save(it.apply { id = repos.userOption.findSingleByUser(u)()?.id ?: 0 })
         }
 
-        req.userCharacterList?.let { news ->
+        req.userCharacterList?.unique { it.characterId }?.let { news ->
             repos.userCharacter.saveAll(news.mapApply {
                 id = repos.userCharacter.findByUserAndCharacterId(u, characterId)()?.id ?: 0 }) }
 
-        req.userMapList?.let { news ->
+        req.userMapList?.unique { it.mapId }?.let { news ->
             repos.userMap.saveAll(news.mapApply {
                 id = repos.userMap.findByUserAndMapId(u, mapId)()?.id ?: 0 }) }
 
-        req.userLoginBonusList?.let { news ->
+        req.userLoginBonusList?.unique { it.bonusId }?.let { news ->
             repos.userLoginBonus.saveAll(news.mapApply {
-                id = repos.userLoginBonus.findByUserAndBonusId(u, bonusId)()?.id ?: 0 }) }
+                id = repos.userLoginBonus.findByUserAndBonusId(u, bonusId)()?.id ?: 0 
+                isCurrent = false
+            }) }
 
         req.userRatingList?.getOrNull(0)?.let { r ->
             repos.userUdemae.saveAndFlush(r.udemae.apply {
@@ -102,33 +107,48 @@ class UpsertUserAllHandler(
             saveRating(r.nextNewRatingList, u, "recent_rating_next_new")
         }
 
-        req.userItemList?.let { news ->
+        req.userItemList?.unique { it.itemId to it.itemKind }?.let { news ->
             repos.userItem.saveAll(news.mapApply {
                 id = repos.userItem.findByUserAndItemKindAndItemId(u, itemKind, itemId)()?.id ?: 0 }) }
 
-        req.userMusicDetailList?.let { news ->
+        req.userMusicDetailList?.unique { it.musicId to it.level }?.let { news ->
             repos.userMusicDetail.saveAll(news.mapApply {
                 id = repos.userMusicDetail.findByUserAndMusicIdAndLevel(u, musicId, level)()?.id ?: 0 }) }
 
-        req.userCourseList?.let { news ->
+        req.userCourseList?.unique { it.courseId }?.let { news ->
             repos.userCourse.saveAll(news.mapApply {
                 id = repos.userCourse.findByUserAndCourseId(u, courseId)()?.id ?: 0 }) }
 
-        req.userFriendSeasonRankingList?.let { news ->
+        req.userFriendSeasonRankingList?.unique { it.seasonId }?.let { news ->
             repos.userFriendSeasonRanking.saveAll(news.mapApply {
                 id = repos.userFriendSeasonRanking.findByUserAndSeasonId(u, seasonId)()?.id ?: 0 }) }
 
-        req.userFavoriteList?.let { news ->
+        req.userFavoriteList?.unique { it.itemKind }?.let { news ->
             repos.userFavorite.saveAll(news.mapApply {
                 id = repos.userFavorite.findByUserAndItemKind(u, itemKind)()?.id ?: 0 }) }
 
-        req.userActivityList?.let { news ->
-            repos.userAct.saveAll(news.flatMap { listOf(it.musicList, it.playList) }.flatten()
-                .filter { it.kind != 0 && it.activityId != 0 }
-                .mapApply {
-                    id = repos.userAct.findByUserAndKindAndActivityId(u, kind, activityId)()?.id ?: 0
-                    user = u
-                }.sortedBy { it.sortNumber })
+        // Added on 1.50
+        req.userKaleidxScopeList?.unique { it.gateId }?.let { lst ->
+            repos.userKaleidx.saveAll(lst.mapApply {
+                id = repos.userKaleidx.findByUserAndGateId(u, gateId)?.id ?: 0 }) }
+
+        req.userIntimateList?.unique { it.partnerId }?.let { lst ->
+            repos.userIntimate.saveAll(lst.mapApply {
+                id = repos.userIntimate.findByUserAndPartnerId(u, partnerId)?.id ?: 0 }) }
+
+        // 2024/10/31 Found some user data findByUserAndKindAndActivityId is not unique
+        // I think userActivityList is not important, so I will ignore it
+        try {
+            req.userActivityList?.let { news ->
+                repos.userAct.saveAll(news.flatMap { listOf(it.musicList, it.playList) }.flatten()
+                    .filter { it.kind != 0 && it.activityId != 0 }
+                    .mapApply {
+                        // id = repos.userAct.findByUserAndKindAndActivityId(u, kind, activityId)()?.id ?: 0
+                        user = u
+                    }.sortedBy { it.sortNumber })
+            }
+        } catch (e: Exception) {
+            logger.error("Error saving user activity", e)
         }
 
         if(req.isNewFavoritemusicList == "0")

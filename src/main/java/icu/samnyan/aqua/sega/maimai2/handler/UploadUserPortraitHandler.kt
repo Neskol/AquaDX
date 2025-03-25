@@ -1,13 +1,13 @@
 package icu.samnyan.aqua.sega.maimai2.handler
 
 import ext.div
+import ext.logger
+import ext.parsing
 import ext.path
 import icu.samnyan.aqua.net.utils.PathProps
 import icu.samnyan.aqua.sega.general.BaseHandler
-import icu.samnyan.aqua.sega.maimai2.model.request.UploadUserPortrait
+import icu.samnyan.aqua.sega.maimai2.model.request.Mai2UserPortrait
 import icu.samnyan.aqua.sega.util.jackson.BasicMapper
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import java.io.IOException
@@ -35,8 +35,7 @@ class UploadUserPortraitHandler(
         // Maimai DX sends split base64 data for one jpeg image.
         // So, make a temp file and keep append bytes until last part received.
         // If finished, rename it to other name so user can keep save multiple scorecards in a single day.
-
-        val up = mapper.convert(request, UploadUserPortrait::class.java).userPortrait
+        val up = parsing { mapper.convert(request["userPortrait"]!!, Mai2UserPortrait::class.java) }
 
         val id = up.userId
         val num = up.divNumber
@@ -70,6 +69,6 @@ class UploadUserPortraitHandler(
     }
 
     companion object {
-        private val logger: Logger = LoggerFactory.getLogger(UploadUserPortraitHandler::class.java)
+        private val logger = logger()
     }
 }

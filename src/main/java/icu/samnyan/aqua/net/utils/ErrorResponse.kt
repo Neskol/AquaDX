@@ -17,6 +17,8 @@ class ApiException(val code: Int, message: Str) : RuntimeException(message) {
     fun resp() = ResponseEntity.status(code).body(message.toString())
 }
 
+fun Exception.simpleDescribe(): String = if (this is ApiException) "E${code}" else javaClass.simpleName
+
 @ControllerAdvice(basePackages = ["icu.samnyan"])
 class GlobalExceptionHandler {
     @ExceptionHandler(ApiException::class)

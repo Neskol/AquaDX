@@ -4,6 +4,7 @@ package icu.samnyan.aqua.sega.maimai2.model
 
 import icu.samnyan.aqua.net.games.GenericPlaylogRepo
 import icu.samnyan.aqua.net.games.GenericUserDataRepo
+import icu.samnyan.aqua.net.games.GenericUserMusicRepo
 import icu.samnyan.aqua.net.games.IUserRepo
 import icu.samnyan.aqua.sega.general.model.Card
 import icu.samnyan.aqua.sega.maimai2.model.userdata.*
@@ -27,11 +28,7 @@ interface Mai2UserLinked<T>: JpaRepository<T, Long>, IUserRepo<Mai2UserDetail, T
 
 interface Mai2MapEncountNpcRepo : Mai2UserLinked<Mai2MapEncountNpc>
 
-interface Mai2UserActRepo : Mai2UserLinked<Mai2UserAct> {
-    fun findByUserAndKindAndActivityId(user: Mai2UserDetail, kind: Int, id: Int): Optional<Mai2UserAct>
-
-    fun findByUser_Card_ExtIdAndKind(userId: Long, kind: Int): List<Mai2UserAct>
-}
+interface Mai2UserActRepo : Mai2UserLinked<Mai2UserAct>
 
 interface Mai2UserCardRepo : Mai2UserLinked<Mai2UserCard> {
     fun findByUserAndCardId(user: Mai2UserDetail, cardId: Int): Optional<Mai2UserCard>
@@ -90,12 +87,10 @@ interface Mai2UserMapRepo : Mai2UserLinked<Mai2UserMap> {
     fun findByUserAndMapId(user: Mai2UserDetail, mapId: Int): Optional<Mai2UserMap>
 }
 
-interface Mai2UserMusicDetailRepo : Mai2UserLinked<Mai2UserMusicDetail> {
+interface Mai2UserMusicDetailRepo : Mai2UserLinked<Mai2UserMusicDetail>, GenericUserMusicRepo<Mai2UserMusicDetail> {
     fun findByUser_Card_ExtIdAndMusicId(userId: Long, id: Int): List<Mai2UserMusicDetail>
 
     fun findByUserAndMusicIdAndLevel(user: Mai2UserDetail, musicId: Int, level: Int): Optional<Mai2UserMusicDetail>
-
-    fun findByUser_Card_ExtIdAndMusicIdIn(userId: Long, musicId: List<Int>): List<Mai2UserMusicDetail>
 
     fun findByUserId(userId: Long): List<Mai2UserMusicDetail>
 }
@@ -104,11 +99,24 @@ interface Mai2UserOptionRepo : Mai2UserLinked<Mai2UserOption>
 
 interface Mai2UserPlaylogRepo : GenericPlaylogRepo<Mai2UserPlaylog>, Mai2UserLinked<Mai2UserPlaylog> {
     fun findByUser_Card_ExtIdAndMusicIdAndLevel(userId: Long, musicId: Int, level: Int): List<Mai2UserPlaylog>
+    fun findByUser_Card_ExtIdAndMusicIdAndUserPlayDate(
+        userCardExtId: Long,
+        musicId: Int,
+        userPlayDate: String
+    ): MutableList<Mai2UserPlaylog>
 }
 
 interface Mai2UserPrintDetailRepo : JpaRepository<Mai2UserPrintDetail, Long>
 
 interface Mai2UserUdemaeRepo : Mai2UserLinked<Mai2UserUdemae>
+
+interface MAi2UserKaleidxRepo : Mai2UserLinked<Mai2UserKaleidx> {
+    fun findByUserAndGateId(user: Mai2UserDetail, gateId: Int): Mai2UserKaleidx?
+}
+
+interface MAi2UserIntimateRepo : Mai2UserLinked<Mai2UserIntimate> {
+    fun findByUserAndPartnerId(user: Mai2UserDetail, partnerId: Int): Mai2UserIntimate?
+}
 
 interface Mai2GameChargeRepo : JpaRepository<Mai2GameCharge, Long>
 
@@ -139,6 +147,8 @@ class Mai2Repos(
     val userPlaylog: Mai2UserPlaylogRepo,
     val userPrintDetail: Mai2UserPrintDetailRepo,
     val userUdemae: Mai2UserUdemaeRepo,
+    val userKaleidx: MAi2UserKaleidxRepo,
+    val userIntimate: MAi2UserIntimateRepo,
     val gameCharge: Mai2GameChargeRepo,
     val gameEvent: Mai2GameEventRepo,
     val gameSellingCard: Mai2GameSellingCardRepo

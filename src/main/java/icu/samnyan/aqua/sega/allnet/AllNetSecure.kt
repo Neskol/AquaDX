@@ -30,6 +30,13 @@ class TokenChecker(
 ) : HandlerInterceptor {
     val log = LoggerFactory.getLogger(TokenChecker::class.java)
 
+    companion object {
+        private val log = LoggerFactory.getLogger(TokenChecker::class.java)
+
+        private val currentSession = ThreadLocal<KeychipSession?>()
+        fun getCurrentSession() = currentSession.get()
+    }
+
     /**
      * Handle request before it's processed.
      */
@@ -48,6 +55,8 @@ class TokenChecker(
         if (token.isNotBlank() && (keyChipRepo.existsByKeychipId(token) || session != null
                 || (frontierProps.enabled && frontierProps.ftk == token)))
         {
+            currentSession.set(session)
+
             // Forward the request
             val w = RewriteWrapper(req, token).apply { setAttribute("token", token) }
             req.getRequestDispatcher(w.requestURI).forward(w, resp)
@@ -72,11 +81,16 @@ class TokenChecker(
 /**
  * Request wrapper for rewriting the URI after token check.
  */
-class RewriteWrapper(req: HttpServletRequest, token: Str) : HttpServletRequestWrapper(req) {
+class RewriteWrapper(val req: HttpServletRequest, token: Str) : HttpServletRequestWrapper(req) {
     val replace = "/gs/$token/"
     val newUri = req.requestURI.replace(replace, "/g/")
     val newUrl = req.requestURL.toString().replace(replace, "/g/")
     val newSp = req.servletPath.replace(replace, "/g/")
+
+    override fun getHeader(name: String): String? {
+        if (name == "wrapper original url") return req.requestURL.toString()
+        return super.getHeader(name)
+    }
 
     override fun getRequestURI() = newUri
     override fun getRequestURL() = StringBuffer(newUrl)

@@ -4,16 +4,20 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 plugins {
-    val ktVer = "2.0.0-Beta5"
+    val ktVer = "2.1.10"
 
     java
     kotlin("plugin.lombok") version ktVer
     kotlin("jvm") version ktVer
     kotlin("plugin.spring") version ktVer
+    kotlin("plugin.jpa") version ktVer
     kotlin("plugin.serialization") version ktVer
+    kotlin("plugin.allopen") version ktVer
+    kotlin("kapt") version ktVer
     id("io.freefair.lombok") version "8.6"
     id("org.springframework.boot") version "3.2.3"
     id("com.github.ben-manes.versions") version "0.51.0"
+    id("org.hibernate.orm") version "6.4.4.Final"
     application
 }
 
@@ -43,11 +47,17 @@ dependencies {
     testImplementation("org.springframework.security:spring-security-test")
     implementation("net.logstash.logback:logstash-logback-encoder:7.4")
 
+    // Metrics
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("io.micrometer:micrometer-registry-prometheus")
+
     // Database
     runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.3.3")
     runtimeOnly("org.xerial:sqlite-jdbc:3.45.2.0")
     implementation("org.hibernate.orm:hibernate-core:6.4.4.Final")
     implementation("org.hibernate.orm:hibernate-community-dialects:6.4.4.Final")
+    implementation("io.github.openfeign.querydsl:querydsl-jpa:6.10.1")
+    kapt("io.github.openfeign.querydsl:querydsl-apt:6.10.1:jpa")
 
     // JSR305 for nullable
     implementation("com.google.code.findbugs:jsr305:3.0.2")
@@ -57,11 +67,11 @@ dependencies {
     // =============================
 
     // Network
-    implementation("io.ktor:ktor-client-core:2.3.8")
-    implementation("io.ktor:ktor-client-cio:2.3.8")
-    implementation("io.ktor:ktor-client-content-negotiation:2.3.8")
-    implementation("io.ktor:ktor-client-encoding:2.3.8")
-    implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.8")
+    implementation("io.ktor:ktor-client-core:3.0.3")
+    implementation("io.ktor:ktor-client-cio:3.0.3")
+    implementation("io.ktor:ktor-client-content-negotiation:3.0.3")
+    implementation("io.ktor:ktor-client-encoding:3.0.3")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:3.0.3")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
 
     // Somehow these are needed for ktor even though they're not in the documentation
@@ -107,6 +117,29 @@ springBoot {
     mainClass.set("icu.samnyan.aqua.EntryKt")
 }
 
+application {
+    mainClass = "icu.samnyan.aqua.EntryKt"
+}
+
+hibernate {
+    enhancement {
+        enableLazyInitialization = true
+        enableAssociationManagement = false
+        enableExtendedEnhancement = false
+    }
+}
+
+kapt {
+    includeCompileClasspath = false
+    keepJavacAnnotationProcessors = true
+}
+
+allOpen {
+    annotation("jakarta.persistence.Entity")
+    annotation("jakarta.persistence.MappedSuperclass")
+    annotation("jakarta.persistence.Embeddable")
+}
+
 val buildTime: String by extra(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss z").withZone(ZoneId.of("UTC")).format(Instant.now()))
 
 tasks.processResources {
@@ -131,4 +164,10 @@ tasks.withType<Javadoc> {
 
 tasks.getByName<Jar>("jar") {
     enabled = false
+}
+
+sourceSets {
+    main {
+        java.srcDir("${layout.buildDirectory.get()}/generated/source/kapt/main")
+    }
 }
